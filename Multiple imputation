@@ -1,0 +1,2122 @@
+#Loading the data
+data his;
+	set '/home/u63649134/Thesis/his2018_ind_uhasselt_lb250425.sas7bdat';
+#Data to be used for the rest of the analysis(Filtering);
+data particip;
+set his;
+where age8 > 1 and year = 2018  and particip = 1 and not (SELFSTAT=1);
+drop ID07_30;
+run;
+
+#Summary statistic
+##Crosstabulation
+proc freq data=his_filtered;
+    tables 
+        Urb1*VT01_2 
+        ID_1*VT01_2 
+        AL05_3*VT01_2
+        TA06_1*VT01_2 
+        PA10_1*VT01_2 
+        QL_1*VT01_2 
+        RH04_1*VT01_2
+        VI01_1*VT01_2
+        IN_1*VT01_2 
+        ET_3*VT01_2 
+        AGE8*VT01_2
+        HC04*VT01_2
+        /nocum nocol nopercent chisq;
+run;
+
+#Summarizing the missingness in the subset
+
+##Subset of variables for the mental heath research question
+data filt_particip;
+set particip(keep= ID_ANOM_e5 year age8 HC04  ET_3  IN_1 QL_1 PA10_1 AL05_3 
+    TA06_1 ID_1 RH04_1 VT01_2 VI01_1 Urb1 WB_2 provw  wfin hh_cluster_e5);
+run; 
+## Overall missingness
+data overall_miss_agg;
+    set filt_particip end=last;
+    array vars {*} age8 HC04 ET_3 IN_1 QL_1 PA10_1 AL05_3 
+                   TA06_1 ID_1 RH04_1 VT01_2 VI01_1 Urb1 WB_2;
+    retain total_cells n_missing_1 n_missing_3 0;
+
+    do i = 1 to dim(vars);
+        total_cells + 1;
+
+        if vars{i} = -1 then n_missing_1 + 1;     /* Count -1 (Missing) */
+        else if vars{i} = -3 then n_missing_3 + 1; /* Count -3 (Not Applicable) */
+    end;
+
+    if last then do;
+        percent_missing_1 = (n_missing_1 / total_cells) * 100;
+        percent_missing_3 = (n_missing_3 / total_cells) * 100;
+        output;
+    end;
+
+    keep total_cells n_missing_1 percent_missing_1
+         n_missing_3 percent_missing_3;
+run;
+
+proc print data=overall_missingness noobs;
+    format percent_missing 6.2;
+run;
+
+##Missingness by variable
+data variable_missingness;
+    set filt_particip end=last;
+
+    array vars {*}   age8 HC04 Urb1 ET_3 IN_1 QL_1 PA10_1 AL05_3 
+                   TA06_1 ID_1 RH04_1 VT01_2 VI01_1 WB_2 Provw wfin hh_cluster_e5 ID_ANOM_e5;
+
+    array var_names[19] $32 _temporary_ ('age8', 'HC04','Urb1','ET_3', 'IN_1', 'QL_1',
+                                         'PA10_1', 'AL05_3', 'TA06_1', 'ID_1',
+                                         'RH04_1', 'VT01_2', 'VI01_1' 'WB_2','Provw', 'wfin', 'hh_cluster_e5',
+                                         'ID_ANOM_e5');
+
+    array n_total[19] _temporary_;
+    array n_missing_1[19] _temporary_;
+    array n_missing_3[19] _temporary_;
+
+    do i = 1 to dim(vars);
+        n_total[i] + 1;
+        if vars[i] = -1 then n_missing_1[i] + 1;
+        else if vars[i] = -3 then n_missing_3[i] + 1;
+    end;
+
+    if last then do;
+        do j = 1 to dim(vars);
+            varname = var_names[j];
+            total = n_total[j];
+            missing_1 = n_missing_1[j];
+            missing_3 = n_missing_3[j];
+            valid = total - missing_1 - missing_3;
+
+            percent_missing_1 = (missing_1 / total) * 100;
+            percent_missing_3 = (missing_3 / total) * 100;
+            percent_valid = (valid / total) * 100;
+
+            output;
+        end;
+    end;
+
+    keep varname total missing_1 percent_missing_1 
+         missing_3 percent_missing_3 valid percent_valid;
+run;
+
+##Missingness summary plot
+data long_missing;
+    set variable_missingness;
+    
+    response_type = 'Valid'; 
+    percent = percent_valid; 
+    output;
+
+    response_type = 'Missing (-1)';
+    percent = percent_missing_1;
+    output;
+
+    response_type = 'Not Applicable (-3)';
+    percent = percent_missing_3;
+    output;
+run;
+
+
+proc sgplot data=long_missing; /* Best one*/
+    vbar varname / response=percent group=response_type groupdisplay=cluster stat=sum datalabel;
+    yaxis label="Percentage" grid;
+    xaxis label="Variable";
+    title "Response Breakdown by Variable (% Valid, Missing, Not Applicable)";
+run;
+
+# Missingness Pattern using macro(referneced in the report)
+%missingPattern(datain=filt_particip ,varlist= HC04 age8 Provw ET_3 IN_1 QL_1 PA10_1 AL05_3 TA06_1 ID_1 RH04_1 WB_2 VT01_2 Urb1 VI01_1, 
+exclude=False, 
+missPattern1=TRUE,
+dataout1=Data1,
+missPattern2=TRUE, 
+dataout2=Data2,
+missPattern3=TRUE, 
+dataout3=Data3, 
+missPattern4=TRUE, 
+dataout4=Data4);
+
+percentage missingness overall dataset;
+data perc_miss_fulldata;
+    set particip end=last;
+    array vars {*} wfin provw particip year age5 age5y age8 age9 hc_01 hc01 hc04 hc05 prov regio selfstat ses_brx dateenq Urb1 al01 al02 al03 al04 
+ al05 al06 al07 al08 al09 al10 al11 al12 al13 al0901 al1001 al1101 al1201 al1301 AL01_1 AL01_2 AL01_3 AL01_4 AL01_5 AL02_1 AL03_1 
+ AL03_2 AL04_1 AL05_1 AL05_2 AL05_3 AL_7 AL05_4 AL05_5 AL05_6 AL05_7 AL05_8 AL06_1 AL06_2 AL06_3 AL07_1 AL08_1 AL_1 AL_2 ET01 et02 
+ et03 ET_2 ET_3 ET_1 ga01 ga0201 ga0202 ga0203 ga0204 ga0205 ga0206 ga0207 ga0208 ga0209 ga0301 ga0302 ga0303 ga0304 ga0305 ga0306 
+ ga0307 ga0308 ga0309 ga04 ga04a ga0501 ga0502 ga0503 ga0504 ga0505 ga0506 ga0507 ga0508 ga0509 ga06 GA01_1 GA02_1 GA02_2 GA03_1 
+ GA03_2 GA_1 GA_2 GA_3 GA04_1 GA04_2 GA05_1 GA06_1 HC06_1 HC07_1 HC08_1 HC09_1 HC10_1 id01 id03 id05 id02 ID01_1 ID02_1 ID03_1 
+ ID03_2 ID03_3 ID05_1 ID07_1 ID07_2 ID7_1 ID07_30 ID7_11 ID_1 ID06_1 id06 id0401 id0402 id0403 id0404 id0405 id0406 id0701 id0702 
+ id0703 id0704 id0705 id0706 id0707 id0708 id0709 id0710 id0711 id0712 ID04_1 ID04_2 ID06_2 ID07_3 ID7_2 ID7_3 ID7_4 ID7_5 ID7_6 
+ ID7_7 ID7_8 ID7_9 ID7_10 ID7_12 pa01 pa02 pa03 pa04 pa05 pa06 pa07m pa07h pa08 pa09m pa09h pa10 PA01_1 PA01_2 PA02_1 PA02_2 PA04_1 
+ PA04_2 PA_1 PA_2 PA_3 PA_4 PA09_1 PA10_1 PA10_2 ql01 ql02 ql03 ql04 ql05 QL01_1 QL02_1 QL03_1 QL04_1 QL05_1 QL_1 QL_2 rh01 rh02 
+ rh03 rh04 rh05 rh06 rh0716 rh0701 rh0702 rh0703 rh0704 rh0705 rh0706 rh0707 rh0708 rh0709 rh0710 rh0711 rh0712 rh0713 rh0714 rh0715 
+ RH02_2 RH03_1 RH04_1 RH_1 RH06_1 RH07_1 RH07_2 ta02 ta0101 ta03 ta06 ta0702 ta0703 ta0704 ta08 ta1101 ta1102 ta1103 ta1104 ta1107 
+ ta1108 ta13 ta14 ta1501 ta1502 ta1503 ta1504 ta1507 ta1508 TA01_1 TA01_2 TA04_1 TA03_1 TA05_1 TA06_1 TA06_2 TA06_3 TA07_1 TA07_2 
+ TA07_3 TA08_1 TA08_2 TA08_3 TA09_1 TA10_1 TA06_4 ta0701 ta0705 ta1105 ta1106 ta1505 ta1506 TA01 TA04 TA05 TA09 TA10 TA12 ta1109 
+ ta1509 TA13_1 vi01 vi0201 vi0202 vi0203 vi0204 vi0205 vi0206 vi0207 vi0208 vi0211 vi0212 vi0213 vi0214 vi0301 vi0302 vi0303 vi0304 
+ vi0305 vi0306 vi0307 vi0308 vi0309 vi0310 vi0311 vi04 VI01_1 VI02_1 VI02_2 VI02_3 VI02_3B VI02_4 VI02_5 VI02_6 VI02_7 VI02_8 
+ VI0301_1 VI0302_1 VI0303_1 VI0304_1 VI0305_1 VI0306_1 VI0307_1 VI0308_1 VI0309_1 VI0310_1 VI0311_1 VI04_1 VI04_2 VI04_3 vt01 vt0201 
+ vt0202 vt0203 vt0204 VT01_1 VT01_2 VT02_1 VT02_2 wb01 wb02 wb03 wb04 wb05 wb06 wb07 wb08 wb09 wb10 wb11 wb12 wb13 WB_1 WB_2 WB_3 
+ IN_1 hh_cluster_e5 id_anom_e5;
+    retain total_cells n_missing_1 n_missing_3 0;
+
+    do i = 1 to dim(vars);
+        total_cells + 1;
+
+        if vars{i} = -1 then n_missing_1 + 1;     /* Count -1 (Missing) */
+        else if vars{i} = -3 then n_missing_3 + 1; /* Count -3 (Not Applicable) */
+    end;
+
+    if last then do;
+        percent_missing_1 = (n_missing_1 / total_cells) * 100;
+        percent_missing_3 = (n_missing_3 / total_cells) * 100;
+        output;
+    end;
+
+    keep total_cells n_missing_1 percent_missing_1
+         n_missing_3 percent_missing_3;
+run;
+
+proc print data=perc_miss_fulldata noobs;
+    format percent_missing 6.2;
+run;
+
+data variable_missingness;
+    set particip end=last;
+
+    array vars {*}   wfin provw particip year age5 age5y age8 age9 hc_01 hc01 hc04 hc05 prov regio selfstat ses_brx dateenq Urb1 al01 al02 al03 al04 
+ al05 al06 al07 al08 al09 al10 al11 al12 al13 al0901 al1001 al1101 al1201 al1301 AL01_1 AL01_2 AL01_3 AL01_4 AL01_5 AL02_1 AL03_1 
+ AL03_2 AL04_1 AL05_1 AL05_2 AL05_3 AL_7 AL05_4 AL05_5 AL05_6 AL05_7 AL05_8 AL06_1 AL06_2 AL06_3 AL07_1 AL08_1 AL_1 AL_2 ET01 et02 
+ et03 ET_2 ET_3 ET_1 ga01 ga0201 ga0202 ga0203 ga0204 ga0205 ga0206 ga0207 ga0208 ga0209 ga0301 ga0302 ga0303 ga0304 ga0305 ga0306 
+ ga0307 ga0308 ga0309 ga04 ga04a ga0501 ga0502 ga0503 ga0504 ga0505 ga0506 ga0507 ga0508 ga0509 ga06 GA01_1 GA02_1 GA02_2 GA03_1 
+ GA03_2 GA_1 GA_2 GA_3 GA04_1 GA04_2 GA05_1 GA06_1 HC06_1 HC07_1 HC08_1 HC09_1 HC10_1 id01 id03 id05 id02 ID01_1 ID02_1 ID03_1 
+ ID03_2 ID03_3 ID05_1 ID07_1 ID07_2 ID7_1 ID07_30 ID7_11 ID_1 ID06_1 id06 id0401 id0402 id0403 id0404 id0405 id0406 id0701 id0702 
+ id0703 id0704 id0705 id0706 id0707 id0708 id0709 id0710 id0711 id0712 ID04_1 ID04_2 ID06_2 ID07_3 ID7_2 ID7_3 ID7_4 ID7_5 ID7_6 
+ ID7_7 ID7_8 ID7_9 ID7_10 ID7_12 pa01 pa02 pa03 pa04 pa05 pa06 pa07m pa07h pa08 pa09m pa09h pa10 PA01_1 PA01_2 PA02_1 PA02_2 PA04_1 
+ PA04_2 PA_1 PA_2 PA_3 PA_4 PA09_1 PA10_1 PA10_2 ql01 ql02 ql03 ql04 ql05 QL01_1 QL02_1 QL03_1 QL04_1 QL05_1 QL_1 QL_2 rh01 rh02 
+ rh03 rh04 rh05 rh06 rh0716 rh0701 rh0702 rh0703 rh0704 rh0705 rh0706 rh0707 rh0708 rh0709 rh0710 rh0711 rh0712 rh0713 rh0714 rh0715 
+ RH02_2 RH03_1 RH04_1 RH_1 RH06_1 RH07_1 RH07_2 ta02 ta0101 ta03 ta06 ta0702 ta0703 ta0704 ta08 ta1101 ta1102 ta1103 ta1104 ta1107 
+ ta1108 ta13 ta14 ta1501 ta1502 ta1503 ta1504 ta1507 ta1508 TA01_1 TA01_2 TA04_1 TA03_1 TA05_1 TA06_1 TA06_2 TA06_3 TA07_1 TA07_2 
+ TA07_3 TA08_1 TA08_2 TA08_3 TA09_1 TA10_1 TA06_4 ta0701 ta0705 ta1105 ta1106 ta1505 ta1506 TA01 TA04 TA05 TA09 TA10 TA12 ta1109 
+ ta1509 TA13_1 vi01 vi0201 vi0202 vi0203 vi0204 vi0205 vi0206 vi0207 vi0208 vi0211 vi0212 vi0213 vi0214 vi0301 vi0302 vi0303 vi0304 
+ vi0305 vi0306 vi0307 vi0308 vi0309 vi0310 vi0311 vi04 VI01_1 VI02_1 VI02_2 VI02_3 VI02_3B VI02_4 VI02_5 VI02_6 VI02_7 VI02_8 
+ VI0301_1 VI0302_1 VI0303_1 VI0304_1 VI0305_1 VI0306_1 VI0307_1 VI0308_1 VI0309_1 VI0310_1 VI0311_1 VI04_1 VI04_2 VI04_3 vt01 vt0201 
+ vt0202 vt0203 vt0204 VT01_1 VT01_2 VT02_1 VT02_2 wb01 wb02 wb03 wb04 wb05 wb06 wb07 wb08 wb09 wb10 wb11 wb12 wb13 WB_1 WB_2 WB_3 
+ IN_1 hh_cluster_e5 id_anom_e5;
+
+    array var_names[362] $32 _temporary_ ("wfin", "provw", "particip", "year", "age5", "age5y", "age8", "age9", "hc_01", "hc01", "hc04", "hc05", "prov",
+ "regio", "selfstat", "ses_brx", "dateenq", "Urb1", "al01", "al02", "al03", "al04", "al05", "al06",
+ "al07", "al08", "al09", "al10", "al11", "al12", "al13", "al0901", "al1001", "al1101", "al1201",
+ "al1301", "AL01_1", "AL01_2", "AL01_3", "AL01_4", "AL01_5", "AL02_1", "AL03_1", "AL03_2", "AL04_1", 
+ "AL05_1", "AL05_2", "AL05_3", "AL_7", "AL05_4", "AL05_5", "AL05_6", "AL05_7", "AL05_8", "AL06_1", "AL06_2",
+ "AL06_3", "AL07_1", "AL08_1", "AL_1", "AL_2", "ET01", "et02", "et03", "ET_2", "ET_3", "ET_1", "ga01", "ga0201", 
+ "ga0202", "ga0203", "ga0204", "ga0205", "ga0206", "ga0207", "ga0208", "ga0209", "ga0301", "ga0302", "ga0303",
+ "ga0304", "ga0305", "ga0306", "ga0307", "ga0308", "ga0309", "ga04", "ga04a", "ga0501", "ga0502", "ga0503",
+ "ga0504", "ga0505", "ga0506", "ga0507", "ga0508", "ga0509", "ga06", "GA01_1", "GA02_1", "GA02_2", "GA03_1",
+ "GA03_2", "GA_1", "GA_2", "GA_3", "GA04_1", "GA04_2", "GA05_1", "GA06_1", "HC06_1", "HC07_1", "HC08_1",
+ "HC09_1", "HC10_1", "id01", "id03", "id05", "id02", "ID01_1", "ID02_1", "ID03_1", "ID03_2", "ID03_3",
+ "ID05_1", "ID07_1", "ID07_2", "ID7_1", "ID07_30", "ID7_11", "ID_1", "ID06_1", "id06", "id0401", "id0402",
+ "id0403", "id0404", "id0405", "id0406", "id0701", "id0702", "id0703", "id0704", "id0705", "id0706", "id0707",
+ "id0708", "id0709", "id0710", "id0711", "id0712", "ID04_1", "ID04_2", "ID06_2", "ID07_3", "ID7_2", "ID7_3",
+ "ID7_4", "ID7_5", "ID7_6", "ID7_7", "ID7_8", "ID7_9", "ID7_10", "ID7_12", "pa01", "pa02", "pa03", "pa04",
+ "pa05", "pa06", "pa07m", "pa07h", "pa08", "pa09m", "pa09h", "pa10", "PA01_1", "PA01_2", "PA02_1", "PA02_2",
+ "PA04_1", "PA04_2", "PA_1", "PA_2", "PA_3", "PA_4", "PA09_1", "PA10_1", "PA10_2", "ql01", "ql02", "ql03",
+ "ql04", "ql05", "QL01_1", "QL02_1", "QL03_1", "QL04_1", "QL05_1", "QL_1", "QL_2", "rh01", "rh02", "rh03",
+ "rh04", "rh05", "rh06", "rh0716", "rh0701", "rh0702", "rh0703", "rh0704", "rh0705", "rh0706", "rh0707",
+ "rh0708", "rh0709", "rh0710", "rh0711", "rh0712", "rh0713", "rh0714", "rh0715", "RH02_2", "RH03_1", 
+ "RH04_1", "RH_1", "RH06_1", "RH07_1", "RH07_2", "ta02", "ta0101", "ta03", "ta06", "ta0702", "ta0703",
+ "ta0704", "ta08", "ta1101", "ta1102", "ta1103", "ta1104", "ta1107", "ta1108", "ta13", "ta14",
+ "ta1501", "ta1502", "ta1503", "ta1504", "ta1507", "ta1508", "TA01_1", "TA01_2", "TA04_1", "TA03_1",
+ "TA05_1", "TA06_1", "TA06_2", "TA06_3", "TA07_1", "TA07_2", "TA07_3", "TA08_1", "TA08_2", "TA08_3", 
+ "TA09_1", "TA10_1", "TA06_4", "ta0701", "ta0705", "ta1105", "ta1106", "ta1505", "ta1506", "TA01", "TA04",
+ "TA05", "TA09", "TA10", "TA12", "ta1109", "ta1509", "TA13_1", "vi01", "vi0201", "vi0202", "vi0203",
+ "vi0204", "vi0205", "vi0206", "vi0207", "vi0208", "vi0211", "vi0212", "vi0213", "vi0214", "vi0301",
+ "vi0302", "vi0303", "vi0304", "vi0305", "vi0306", "vi0307", "vi0308", "vi0309", "vi0310", "vi0311",
+ "vi04", "VI01_1", "VI02_1", "VI02_2", "VI02_3", "VI02_3B", "VI02_4", "VI02_5", "VI02_6", "VI02_7",
+ "VI02_8", "VI0301_1", "VI0302_1", "VI0303_1", "VI0304_1", "VI0305_1", "VI0306_1", "VI0307_1", "VI0308_1", 
+ "VI0309_1", "VI0310_1", "VI0311_1", "VI04_1", "VI04_2", "VI04_3", "vt01", "vt0201", "vt0202", "vt0203",
+ "vt0204", "VT01_1", "VT01_2", "VT02_1", "VT02_2", "wb01", "wb02", "wb03", "wb04", "wb05", "wb06", "wb07",
+ "wb08", "wb09", "wb10", "wb11", "wb12", "wb13", "WB_1", "WB_2", "WB_3", "IN_1", "hh_cluster_e5", "id_anom_e5");
+
+    array n_total[362] _temporary_;
+    array n_missing_1[362] _temporary_;
+    array n_missing_3[362] _temporary_;
+
+    do i = 1 to dim(vars);
+        n_total[i] + 1;
+        if vars[i] = -1 then n_missing_1[i] + 1;
+        else if vars[i] = -3 then n_missing_3[i] + 1;
+    end;
+
+    if last then do;
+        do j = 1 to dim(vars);
+            varname = var_names[j];
+            total = n_total[j];
+            missing_1 = n_missing_1[j];
+            missing_3 = n_missing_3[j];
+            valid = total - missing_1 - missing_3;
+
+            percent_missing_1 = (missing_1 / total) * 100;
+            percent_missing_3 = (missing_3 / total) * 100;
+            percent_valid = (valid / total) * 100;
+
+            output;
+        end;
+    end;
+
+    keep varname total missing_1 percent_missing_1 
+         missing_3 percent_missing_3 valid percent_valid;
+run;
+
+#MAR assumption
+##Creating missingness indicators for each variable
+DATA mar_analysis;
+    SET filt_particip;
+    miss_age8 = (age8 = -1);
+    miss_HC04 = (HC04 = -1);
+    miss_ET_3 = (ET_3 = -1);
+    miss_IN_1 = (IN_1 = -1);
+    miss_QL_1 = (QL_1 = -1);
+    miss_PA10_1 = (PA10_1 = -1);
+    miss_AL05_3 = (AL05_3 = -1);
+    miss_Urb1 = (Urb1 = -1);
+    miss_TA06_1 = (TA06_1 = -1);
+    miss_RH04_1 = (RH04_1 = -1);
+    miss_VT01_2 = (VT01_2 = -1);
+    miss_VI01_1 = (VI01_1 = -1);
+    miss_ID = (ID_1 =-1);
+    Run;
+
+##Logistic regression with missingness indicator
+PROC LOGISTIC DATA=mar_analysis;   
+    CLASS HC04(ref='1') miss_VT01_2(ref='1')miss_ET_3(ref='1') Urb1(ref='1') miss_IN_1(ref='1') 
+    miss_RH04_1(ref='1') age8(ref='8') miss_AL05_3(ref='1') miss_QL_1(ref='1') miss_PA10_1(ref='1')
+    miss_TA06_1(ref='1') miss_RH04_1(ref='1')  miss_VI01_1(ref='1')/ PARAM=ref;
+    MODEL miss_VT01_2(event='1') = age8 HC04 Urb1 miss_ET_3 miss_QL_1 
+    miss_PA10_1 miss_AL05_3 miss_TA06_1 miss_VI01_1 miss_IN_1 ;
+    TITLE "Predictors of Missing Data for VT01_2";
+RUN;
+
+#Complete case analysis
+data cc_filtered;
+    set particip(keep= ID_ANOM_e5 hh_cluster_e5 year age8 HC04  ET_3  IN_1 QL_1 PA10_1 AL05_3 
+    TA06_1 ID_1 RH04_1 VT01_2 VI01_1 Urb1 wfin PROVW);
+run;
+
+# Convert -1 values to SAS missing values and -3 to 0
+DATA clean_data;
+  SET cc_filtered; 
+  ARRAY num_vars(*) _NUMERIC_;
+  DO i = 1 TO DIM(num_vars);
+    IF num_vars(i) = -1 THEN num_vars(i) = .;
+    IF num_vars(i) = -3 THEN num_vars(i) = 0;
+  END; 
+RUN;
+
+##Proportional Odds assumption after backward selection
+PROC LOGISTIC DATA=clean_data;
+  WEIGHT wfin;
+CLASS  
+    age8 ET_3 IN_1 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1/param=ref;
+  MODEL VT01_2(order=internal) =  age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04
+ID_1*VI01_1
+QL_1*PA10_1 
+RH04_1*Urb1
+/ LINK=CUMLOGIT equalslopes;
+RUN;
+
+#Empirical logits plots(Proportional Odds assumption)
+
+data clean_datalog;
+set clean_data;
+  ARRAY num_vars(*) _NUMERIC_;
+  DO i = 1 TO DIM(num_vars);
+    IF num_vars(i) = -1 THEN num_vars(i) = .;
+    IF num_vars(i) = -3 THEN num_vars(i) = 0;
+  END;
+  missing_flag = 0;
+  IF NMISS(OF _NUMERIC_) > 0 THEN missing_flag = 1;
+  %IF %SYSFUNC(COUNTW(%SYSFUNC(COMPBL(%SYSFUNC(STRIP(_CHARACTER_)))))) > 0 %THEN %DO;
+    ARRAY char_vars(*) _CHARACTER_;
+    DO j = 1 TO DIM(char_vars);
+      IF MISSING(char_vars(j)) THEN missing_flag = 1;
+    END;
+  %END;
+  IF missing_flag = 0 THEN OUTPUT;
+  DROP i j missing_flag;
+  run;
+
+%EmpiricalLogitPlot(data=clean_datalog,y=VT01_2,x= age8 HC04 QL_1 PA10_1  
+    TA06_1 ID_1 RH04_1  VI01_1 Urb1);
+
+#Partial proportional odds models
+##Stacking the data
+data stacked_cc;
+  set clean_data;
+  do threshold = 1 to 2;
+    response = (VT01_2 <= threshold);
+    z = threshold - 1;
+    m =1-z;
+    output;
+  end;
+run;
+
+## Complete case analysis model
+PROC SURVEYLOGISTIC DATA=stacked_cc;
+  STRATA provw;
+  CLUSTER hh_cluster_e5;
+  WEIGHT wfin;
+CLASS z(ref='1') 
+    age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04/param=ref;
+  MODEL VT01_2(order=internal) = z age8*z QL_1*z VI01_1 PA10_1*z TA06_1 ID_1*z Urb1 RH04_1*z hc04
+ID_1*VI01_1
+QL_1*PA10_1 
+RH04_1*Urb1
+/ LINK=CUMLOGIT  ;
+  OUTPUT OUT=reg_outputz PRED=predicted CUMPRED =cumpred;
+   ods output ParameterEstimates = CC_Estimates;
+RUN;
+
+#MACRO SELECT VARS for extracting variable names;
+%macro selectVars(libname=,datanm=,range=_ALL_,pattern=%,separateby=%str( ), outmacro=lstVars);
+ data tmp;
+ set &datanm.;
+ run;
+ %if "&range." ^=%str() %then %do;
+ data tmp;
+ set tmp;
+ keep &range.;
+ run;
+ %end;
+ %global lstVars;
+ %let lstVars=%str();*reset the macro variable lstVars;
+ proc sql noprint;
+ select name into :lstVars separated by "&separateby."
+ from dictionary.columns
+ where libname=upcase("&libname") and memname = upcase("tmp")
+ and name like "&pattern." escape '#';
+ drop table tmp;
+ quit;
+%mend; 
+
+%selectVars(libname=work,datanm=particip,range=wfin -- id_anom_e5);
+%put &lstVars.; 
+
+####Manaul sorting of variables to distinguish between indicators and original questions
+
+data selected_his;
+set particip;
+keep
+wfin provw hc_01 hc01 hc04 hc05 prov regio Urb1 al01 al02 al03 al04 al05 al06 al07 al08 al09 al10 al11 al12 al13 al0901 al1001 al1101 al1201 al1301
+ AL06_3 ET01 et02 et03 ga01 ga0201 ga0202 ga0203 ga0204 ga0205 ga0206 ga0207 ga0208 ga0209 ga0301 ga0302 ga0303 ga0304 ga0305 ga0306 
+ ga0307 ga0308 ga0309 ga04 ga04a ga0501 ga0502 ga0503 ga0504 ga0505 ga0506 ga0507 ga0508 ga0509 ga06
+ HC06_1 HC07_1 HC08_1 HC09_1 HC10_1 id01 id03 id05 id02 id06 id0401 id0402 id0403 id0404 id0405 id0406 id0701 id0702 id0703 id0704 id0705 
+ id0706 id0707 id0708 id0709 id0710 id0711 id0712 ID07_3 pa01 pa02 pa03 pa04 pa05 pa06 pa07m pa07h pa08 pa09m pa09h pa10 PA01_2
+ PA09_1 PA10_1 PA10_2 ql01 ql02 ql03 ql04 ql05 QL_2 rh01 rh02 RH07_1 rh03 rh04 rh05 rh06 rh0716 rh0701 rh0702 rh0703 rh0704 rh0705 rh0706 rh0707 rh0708 
+ rh0709 rh0710 rh0711 rh0712 rh0713 rh0714 rh0715 ta02 ta0101 ta03 ta06 ta0702 ta0703 ta0704 ta08 ta1101 ta1102 ta1103 ta1104 ta1107 
+ ta1108 ta13 ta14 ta1501 ta1502 ta1503 ta1504 ta1507 ta1508 ta0701 ta0705 ta1105 ta1106 ta1505 ta1506 TA01 TA04 TA05 TA09 TA10 TA12 ta1109 
+ ta1509 vi01 vi0201 vi0202 vi0203 vi0204 vi0205 vi0206 vi0207 vi0208 vi0211 vi0212 vi0213 vi0214 vi0301 vi0302 vi0303 vi0304 
+ vi0305 vi0306 vi0307 vi0308 vi0309 vi0310 vi0311 vi04
+ vt01 vt0201 vt0202 vt0203 vt0204 wb01 wb02 wb03 wb04 wb05 wb06 wb07 wb08 wb09 wb10 wb11 wb12 wb13 IN_1 hh_cluster_e5 id_anom_e5; 
+ run;
+
+# Replace -3 with -1 
+data temp_his;
+  set minussome_gambling_his;
+  array nums _numeric_;
+  do over nums;
+    if nums = -3 then nums = -1;
+  end;
+run;
+
+#Replace -1 with missing 
+data selected_HIS_imputation;
+  set temp_his;
+  array nums _numeric_;
+  do over nums;
+    if nums = -1 then nums = .;
+  end;
+run;
+
+#Macro to select variables by threshold(distinguishing between categorical and continuous)
+%macro detect_type(lib=work, data=your_dataset, threshold=, create_lists=YES);
+   
+    proc contents data=&lib..&data out=varinfo(keep=name type) noprint;
+    run;
+
+    data _null_;
+        set varinfo end=last;
+        call symputx(cats('var', _n_), name);
+        call symputx(cats('type', _n_), type);
+        if last then call symputx('nvars', _n_);
+    run;
+    %put NOTE: Dataset has &nvars variables;
+    %let cat_list=;
+    %let cont_list=;
+    %let cat_count=0;
+    %let cont_count=0;
+    %do i = 1 %to &nvars;
+        %let var = &&var&i;
+        %let vtype = &&type&i;
+        
+        %if &vtype = 2 %then %do;
+            /* Character variable = Categorical */
+            %put &var is CATEGORICAL (character);
+            %let cat_list = &cat_list &var;
+            %let cat_count = %eval(&cat_count + 1);
+        %end;
+        %else %do;
+            proc sql noprint;
+                select count(distinct &var) into :nuniq trimmed
+                from &lib..&data
+                where &var is not missing;
+            quit;
+            
+            %if &nuniq <= &threshold %then %do;
+                %put &var is CATEGORICAL (numeric with &nuniq unique values);
+                %let cat_list = &cat_list &var;
+                %let cat_count = %eval(&cat_count + 1);
+            %end;
+            %else %do;
+                %put &var is CONTINUOUS (numeric with &nuniq unique values);
+                %let cont_list = &cont_list &var;
+                %let cont_count = %eval(&cont_count + 1);
+            %end;
+        %end;
+    %end;
+    
+    %global categorical_vars continuous_vars cat_var_count cont_var_count;
+    %let categorical_vars = &cat_list;
+    %let continuous_vars = &cont_list;
+    %let cat_var_count = &cat_count;
+    %let cont_var_count = &cont_count;
+    
+    %put NOTE: Found &cat_count categorical variables: &cat_list;
+    %put NOTE: Found &cont_count continuous variables: &cont_list;
+    
+    %if %upcase(&create_lists) = YES %then %do;
+        data work.categorical_vars;
+            length VarName $32 VarType $12;
+            %do i = 1 %to &cat_count;
+                %let curr_var = %scan(&cat_list, &i);
+                %if &curr_var ne %then %do;
+                    VarName = "&curr_var";
+                    VarType = "Categorical";
+                    output;
+                %end;
+            %end;
+        run;
+        
+        data work.continuous_vars;
+            length VarName $32 VarType $12;
+            %do i = 1 %to &cont_count;
+                %let curr_var = %scan(&cont_list, &i);
+                %if &curr_var ne %then %do;
+                    VarName = "&curr_var";
+                    VarType = "Continuous";
+                    output;
+                %end;
+            %end;
+        run;
+        
+        %put NOTE: Created datasets 'work.categorical_vars' and 'work.continuous_vars';
+    %end;
+%mend;
+
+##Call the macro
+%detect_type(lib=work, data=selected_his, threshold=10, create_lists=NO);
+
+
+
+#Post imputation
+##Importing the data (m=10)
+proc import datafile= "/home/u63649134/Thesis/ImputationX25_finalnfull.csv"
+            out=Imputation_X25_final
+            dbms=csv
+            replace;
+     getnames=YES;
+run;
+
+data my_imputed_data;
+set Imputation_X25_final;
+run;
+
+##Preparing to round and reintroduce routing
+proc sort data=my_imputed_data; by id_anom_e5; run;
+proc sort data=particip; by id_anom_e5; run;
+
+##Rounding
+%Let categorical_vars = AL01 AL02 AL03 AL04 AL05 AL06 AL06_3 AL07 AL09 AL0901 AL10 AL1001 AL11 AL1101 AL12 AL1201 AL13 AL1301 ET01 ET02 ET03 GA01 GA0201 GA0202 GA0203 GA0204 GA0205 GA0206 GA0207 GA0208 GA0209 GA0301 GA0302 GA0303 GA0304 GA0305 GA0306 GA0307 GA0308 GA0309 GA04 
+GA06 HC01 HC04 HC05 HC06_1 HC07_1 HC09_1 HC10_1 ID01 ID03 ID0401 ID0402 ID0403 ID0404 ID0405 ID0406 ID05 ID06 ID0701 ID0702 ID0703 ID0704 ID0705 ID0706 ID0707 ID0708 ID0709 ID0710 ID0711 ID0712 ID07_3 IN_1 PA01 PA01_2 PA03 PA05 PA10 PA10_1 PA10_2 PROV QL01 QL02 QL03 QL04 QL05
+ REGIO RH01 RH03 RH04 RH05 RH06 RH07_1 RH0701 RH0702 RH0703 RH0704 RH0705 RH0706 RH0707 RH0708 RH0709 RH0710 RH0711 RH0712 RH0713 RH0714 RH0715 RH0716 TA01 TA02 TA03 TA06 TA08 TA09 TA10 TA1101 TA1102 TA1103 TA1104 TA1105 TA1106 TA1107 TA1108 TA1109 TA12 TA13 TA14 TA1501 TA1502 
+ TA1503 TA1504 TA1505 TA1506 TA1507 TA1508 TA1509 URB1 VI01 VI0201 VI0202 VI0203 VI0204 VI0205 VI0206 VI0207 VI0208 VI0211 VI0212 VI0213 VI0214 VI0301 VI0302 VI0303 VI0304 VI0305 VI0306 VI0307 VI0308 VI0309 VI0310 VI0311 VI04 VT0201 VT0202 VT0203 VT0204 WB01 WB02 WB03 WB04 WB05 
+ WB06 WB07 WB08 WB09 WB10 WB11 WB12 WB13 VT01 PA_1 PA_2 PA_3 PA_4 ga0501 ga0502 ga0503 ga0504 ga0505 ga0506 ga0507 ga0508 ga0509;
+%Let contcondition= largest(1,round(i.AL08), 0) as AL08, largest(1,round(i.HC_01), 0) as HC_01, largest(1,round(i.HC08_1), 0) as HC08_1, largest(1,round(i.ID02), 0) as ID02, smallest(1,largest(1,round(i.PA02), 0), 7) as PA02, smallest(1,largest(1,round(i.PA04), 0), 7) as PA04, smallest(1,largest(1,round(i.PA06), 0), 7) as PA06, largest(1,round(i.PA07H), 0) as PA07H, smallest(1,largest(1,round(i.PA07M), 0), 60) as PA07M, smallest(1,largest(1,round(i.PA08), 0), 7) as PA08, smallest(1,largest(1,round(i.PA09H), 0), 24) as PA09H, smallest(1,largest(1,round(i.PA09M), 0), 60) as PA09M, largest(1,i.PA09_1, 0) as PA09_1, smallest(1,largest(1,i.QL_2, -0.5),1) as QL_2, largest(1,round(i.RH02), 0) as RH02, largest(1,round(i.TA0101), 0) as TA0101, largest(1,round(i.TA04), 0) as TA04, largest(1,round(i.TA05), 0) as TA05, largest(1,round(i.TA0701), 0) as TA0701, largest(1,round(i.TA0702), 0) as TA0702, largest(1,round(i.TA0703), 0) as TA0703, 
+largest(1,round(i.TA0704), 0) as TA0704, largest(1,round(i.TA0705),0) as TA0705, i.GA04A as GA04A,;
+
+%macro conttocat(varlist);
+    %local n i var condition;
+    %let n = %sysfunc(countw(&varlist, %str( )));
+    %let condition=;
+    %do i = 1 %to &n;
+        %let var = %scan(&varlist, &i, %str( ));
+        
+     %if &var. ~= id_anom_e5 & &var. ~= wfin & &var. ~=  hh_cluster_e5 & &var. ~= age5 & &var. ~= age8 & &var. ~= age5y
+     & &var. ~= prov & &var. ~= provw & &var. ~= particip & &var. ~= age9 & &var. ~= hc_01 & &var. ~= hc01
+     & &var. ~= hc04 & &var. ~= hc05 & &var. ~= regio & &var. ~= selfstat & &var. ~= Urb1 
+     & &var. ~= dateenq& &var. ~= year & &var. ~= ses_brx & &var. ~= _MULT_ %then
+       %let condition = &condition SMALLEST(1,largest(1,round(i.&var.),l.min_&var.), l.max_&var.) as &var.,;
+   %else
+   %let condition = &condition i.&var.,;
+   %end; 
+    &condition
+%mend;
+%let condition0 = %conttocat(&categorical_vars) &contcondition;
+%put &condition0
+
+%macro max_select(varlist);
+    %local n i var condition;
+    %let n = %sysfunc(countw(&varlist, %str( )));
+    %let condition=;
+    %do i = 1 %to &n;
+        %let var = %scan(&varlist, &i, %str( ));
+        
+     %if &var. ~= id_anom_e5 & &var. ~= wfin & &var. ~=  hh_cluster_e5 & &var. ~= age5 & &var. ~= age8 & &var. ~= age5y
+     & &var. ~= prov & &var. ~= provw & &var. ~= particip & &var. ~= age9 & &var. ~= hc_01 & &var. ~= hc01
+     & &var. ~= hc04 & &var. ~= hc05 & &var. ~= regio & &var. ~= selfstat & &var. ~= Urb1 
+     & &var. ~= dateenq& &var. ~= year & &var. ~= ses_brx & &var. ~= _MULT_ %then
+       %let condition = &condition min(abs(p.&var.)) as min_&var., max(p.&var.) as max_&var.,;
+  %end;  
+    &condition
+%mend;
+%let limits = %max_select(&categorical_vars );
+%put &limits;
+
+proc sql ;
+create table Rounding_Imputed as
+select
+	 &condition0.  _MULT_ ,id_anom_e5, wfin,hh_cluster_e5, prov, provw,
+	hc_01, hc01, hc04, hc05, regio, Urb1
+from my_imputed_data i 
+join (select &limits. 1 as dummy from particip p) l on 1=1
+;
+run;
+
+##Reintroducing -3 and setting to missing for reconstruction
+%selectVars(libname=work,datanm=my_imputed_data,range=wfin -- id_anom_e5);
+%put &lstvars.;
+
+%macro revertNA(varlist);
+    %local n i var condition;
+    %let n = %sysfunc(countw(&varlist, %str( )));
+    %let condition=;
+    %do i = 1 %to &n;
+        %let var = %scan(&varlist, &i, %str( ));
+     %if &var. ~= id_anom_e5 & &var. ~= wfin & &var. ~=  hh_cluster_e5 & &var. ~= age5 & &var. ~= age8 & &var. ~= age5y
+     & &var. ~= prov & &var. ~= provw & &var. ~= particip & &var. ~= age9 & &var. ~= hc_01 & &var. ~= hc01
+     & &var. ~= hc04 & &var. ~= hc05 & &var. ~= regio & &var. ~= selfstat & &var. ~= Urb1 
+     & &var. ~= dateenq& &var. ~= year & &var. ~= ses_brx & &var. ~= _MULT_ %then 
+     
+       %let condition = &condition case when o.&var.=-1 then i.&var. 
+       when o.&var.=-3 then . else o.&var. end as &var.,;
+    %else %let condition = &condition o.&var.,;
+    %end;
+    &condition
+%mend;
+
+%let condition1 = %revertNA(&lstvars.);
+%put &condition1
+
+proc sql ;
+create table Reconstruction_input as
+select
+	 &condition1.  i._MULT_
+from particip o 
+join Rounding_Imputed i on o.id_anom_e5=i.id_anom_e5
+;
+run;
+
+#Reconstruction
+data Imputation_7_WithWB_1;
+    set Reconstruction_input;
+    array orig[12] WB01-WB12;
+    array recode[12] wb1_r wb2_r wb3_r wb4_r wb5_r wb6_r wb7_r wb8_r wb9_r wb10_r wb11_r wb12_r;
+    miss = 0;
+    valid_sum = 0;
+    nvalid = 0;
+    do i = 1 to 12;
+        if orig[i] in (1, 2) then recode[i] = 0;
+        else if orig[i] in (3, 4) then recode[i] = 1;
+        else do;
+            recode[i] = .;
+            miss + 1;
+        end;   
+        if recode[i] ne . then do;
+            valid_sum + recode[i];
+            nvalid + 1;
+        end;
+    end;
+    if miss > 0 and miss <= 3 then do;
+        mean_val = round(valid_sum / nvalid, 1);
+        if mean_val < 0.5 then mean_val = 0;
+else mean_val = 1;
+        do i = 1 to 12;
+            if recode[i] = . then recode[i] = mean_val;
+        end;
+    end;
+    if miss <= 3 then WB_1 = sum(of recode[*]);
+    else WB_1 = -1; 
+    drop i miss valid_sum nvalid mean_val wb1_r wb2_r wb3_r wb4_r wb5_r wb6_r wb7_r wb8_r wb9_r wb10_r wb11_r wb12_r;
+run;
+
+proc sql;
+    create table person_level as
+    select *,
+        case
+            when ET01 = 2 then ET03
+            when ET01 = 1 and ET02 in (12, 13) then ET02
+            when ET01 = 1 then ET02 - 1
+            else .
+        end as edu_level_raw
+    from Imputation_7_WithWB_1;
+quit;
+
+proc sql;
+    create table person_level_harmonized as
+    select *,
+        case
+            when edu_level_raw in (1,2) then 1
+            when edu_level_raw = 3 then 2
+            when edu_level_raw in (4,5) then 3
+            when edu_level_raw in (6,7,8,9,10,11) then 4
+        end as edu_level
+    from person_level;
+quit;
+
+proc sql;
+    create table household_level as
+    select hh_cluster_e5, max(edu_level) as ET_1
+    from person_level_harmonized
+    group by hh_cluster_e5;
+quit;
+
+proc sql;
+    create table Reconstruction_input_WB_1_ETs as
+    select a.*, b.ET_1
+    from person_level_harmonized as a
+    left join household_level as b
+    on a.hh_cluster_e5 = b.hh_cluster_e5;
+quit;
+
+proc sql;
+    create table reconstructed_indicators as
+    select 
+        HC_01,
+        ET01,
+        ET02,
+        ET03,
+        WB_1,
+        /* AGE5: (0–14=1), (15–24=2), (25–44=3), (45–64=4), (65+=5) */
+        case 
+            when HC_01 between 0 and 14 then 1
+            when HC_01 between 15 and 24 then 2
+            when HC_01 between 25 and 44 then 3
+            when HC_01 between 45 and 64 then 4
+            when HC_01 >= 65 then 5
+            else .
+        end as AGE5,
+
+        /* AGE5Y: (0–4=1), ..., (85+=18) */
+        case 
+            when HC_01 between 0 and 4 then 1
+            when HC_01 between 5 and 9 then 2
+            when HC_01 between 10 and 14 then 3
+            when HC_01 between 15 and 19 then 4
+            when HC_01 between 20 and 24 then 5
+            when HC_01 between 25 and 29 then 6
+            when HC_01 between 30 and 34 then 7
+            when HC_01 between 35 and 39 then 8
+            when HC_01 between 40 and 44 then 9
+            when HC_01 between 45 and 49 then 10
+            when HC_01 between 50 and 54 then 11
+            when HC_01 between 55 and 59 then 12
+            when HC_01 between 60 and 64 then 13
+            when HC_01 between 65 and 69 then 14
+            when HC_01 between 70 and 74 then 15
+            when HC_01 between 75 and 79 then 16
+            when HC_01 between 80 and 84 then 17
+            when HC_01 >= 85 then 18
+            else .
+        end as AGE5Y,
+
+        /* AGE8: (0–14=1), (15–24=2), ..., (45–54=5) */
+        case 
+            when HC_01 between 0 and 14 then 1
+            when HC_01 between 15 and 24 then 2
+            when HC_01 between 25 and 34 then 3
+            when HC_01 between 35 and 44 then 4
+            when HC_01 between 45 and 54 then 5
+            when HC_01 between 55 and 64 then 6
+            when HC_01 between 65 and 74 then 7
+            when HC_01 >=75 then 8
+            else .
+        end as AGE8,
+
+        /* AGE9: up to 85+ = 9 */
+        case 
+            when HC_01 between 0 and 14 then 1
+            when HC_01 between 15 and 24 then 2
+            when HC_01 between 25 and 34 then 3
+            when HC_01 between 35 and 44 then 4
+            when HC_01 between 45 and 54 then 5
+            when HC_01 between 55 and 64 then 6
+            when HC_01 between 65 and 74 then 7
+            when HC_01 between 75 and 84 then 8
+            when HC_01 >= 85 then 9
+            else .
+        end as AGE9,
+
+        /* QL01_1: if QL01=1 then 2, else if 2–5 then 1 */
+        case 
+            when QL01 = 1 then 2
+            when QL01 in (2, 3, 4, 5) then 1
+            else .
+        end as QL01_1,
+
+        /* QL02_1: same logic */
+        case 
+            when QL02 = 1 then 2
+            when QL02 in (2, 3, 4, 5) then 1
+            else .
+        end as QL02_1,
+
+        /* QL03_1: same logic */
+        case 
+            when QL03 = 1 then 2
+            when QL03 in (2, 3, 4, 5) then 1
+            else .
+        end as QL03_1,
+
+        /* QL04_1: if QL04=1 then 2, else if 2–5 then 1 */
+        case 
+            when QL04 = 1 then 2
+            when QL04 in (2, 3, 4, 5) then 1
+            else .
+        end as QL04_1,
+
+        /* QL05_1: if QL05=1 then 2, else if 2–5 then 1 */
+        case 
+            when QL05 = 1 then 2
+            when QL05 in (2, 3, 4, 5) then 1
+            else .
+        end as QL05_1,
+
+        /* QL_1: If all QL01–QL05 equal 1 → 1, else → 2 */
+        case 
+            when QL01 = 1 and QL02 = 1 and QL03 = 1 and QL04 = 1 and QL05 = 1 then 1
+            else 2
+        end as QL_1,
+        
+         /* === AL01 === */
+        case 
+            when AL01 < 8 then 1
+            when AL01 >= 8 then 2
+            else .
+        end as AL01_1,
+
+        case 
+            when AL01 = 1 then 1
+            when 1 < AL01 < 5 then 2
+            when 4 < AL01 < 7 then 3
+            when AL01 = 7 then 4
+            when AL01 > 7 then 5
+            else .
+        end as AL01_2,
+
+        case 
+            when AL01 = 1 then 1
+            when AL01 > 1 then 2
+            else .
+        end as AL01_3,
+
+        case 
+            when 0 < AL01 < 9 then 2
+            when AL01 = 9 then 1
+            else .
+        end as AL01_4,
+
+        case 
+            when 0 < AL01 < 8 or AL01 = 9 then 2
+            when AL01 = 8 then 1
+            else .
+        end as AL01_5,
+
+        /* === AL02 === */
+        case 
+            when AL02 is not null then 5 - AL02
+            else .
+        end as AL02_1,
+
+        /* === AL03 & AL03_2 === */
+        case 
+            when AL03 = 1 then 18
+            when AL03 = 2 then 12.5
+            when AL03 = 3 then 7.5
+            when AL03 = 4 then 4.5
+            when AL03 = 5 then 3
+            when AL03 = 6 then 2
+            when AL03 = 7 then 1
+            when AL03 = 8 then 0
+            else .
+        end as AL03_1,
+
+        case 
+            when calculated AL02_1 * calculated AL03_1 = 0 then 0
+            else calculated AL02_1 * calculated AL03_1
+        end as AL03_2,
+
+        /* === AL04 === */
+        case 
+            when AL04 is not null then 4 - AL04
+            else .
+        end as AL04_1,
+
+        /* === AL05 & AL05_2 === */
+        case 
+            when AL05 = 1 then 18
+            when AL05 = 2 then 12.5
+            when AL05 = 3 then 7.5
+            when AL05 = 4 then 4.5
+            when AL05 = 5 then 3
+            when AL05 = 6 then 2
+            when AL05 = 7 then 1
+            when AL05 = 8 then 0
+            else .
+        end as AL05_1,
+
+        case 
+            when calculated AL04_1 * calculated AL05_1 = 0 then 0
+            else calculated AL04_1 * calculated AL05_1
+        end as AL05_2,
+
+        /* === Total Drinks Per Week === */
+        case 
+            when calculated AL03_2 + calculated AL05_2 = 0 then 0
+            else calculated AL03_2 + calculated AL05_2
+        end as AL_35,
+
+        /* === Average Daily Drinks === */
+        case 
+            when calculated AL03_2 + calculated AL05_2 = 0 then 0
+            else (calculated AL03_2 + calculated AL05_2) / 7
+        end as AL_7,
+
+        /* === AL05_3: Weekly drinks level category === */
+        case 
+            when calculated AL01_2 > 2 then 1
+            when 0 < calculated AL_35 < 8 then 2
+            when 7 < calculated AL_35 < 15 then 3
+            when 14 < calculated AL_35 < 22 then 4
+            when calculated AL_35 >= 21 then 5
+            else .
+        end as AL05_3,
+        
+
+        /* === AL05_4: Overconsumption === */
+        case 
+            
+            when hc04 = 2 and calculated AL05_3 > 3 then 1
+            when hc04 = 2 and calculated AL05_3 < 4 then 2
+            when hc04 = 1 and calculated AL05_3 = 5 then 1
+            when hc04 = 1 and calculated AL05_3 < 5 then 2
+            when calculated AL05_3 = 1 then 2 /*change made*/
+            
+        end as AL05_4,
+
+    
+        /* === AL05_5: Hazardous drinking among weekly drinkers === */
+        case 
+            when hc04 = 2 and calculated AL_7 > 2 then 1
+            when hc04 = 2 and calculated AL_7 <= 2 then 2
+            when hc04 = 1 and calculated AL_7 > 4 then 1
+            when hc04 = 1 and calculated AL_7 <= 4 then 2
+            else .
+        end as AL05_5,
+
+        /* === AL05_6: Hazardous drinking in total pop === */
+        case 
+            when calculated AL01_2 > 2 then 0
+            else calculated AL05_5
+        end as AL05_6,
+      
+      /* === AL05_7: Hazardous drinking in daily drinkers === */
+        case 
+            when (calculated AL02_1 + calculated AL04_1) > 5 then calculated AL05_6
+            else -3
+        end as AL05_7,
+
+        
+  /* === AL05_8: Above-recommendation drinking (>10/week) === */
+        case 
+            when calculated AL01_2 > 2 then 2
+            when calculated AL_35 > 10 then 1
+            when calculated AL_35 < 11 then 2
+            else -3
+        end as AL05_8,
+    
+    /*AL06_1*/
+       CASE
+       WHEN calculated AL01_1 = 2 THEN 0
+       WHEN calculated AL01_1 = 1 AND al06 > 7 THEN 1
+       WHEN calculated AL01_1 = 1 AND al06 = 7 THEN 2
+       WHEN calculated AL01_1 = 1 AND al06 > 4 AND al06 < 7 THEN 3
+       WHEN calculated AL01_1 = 1 AND al06 > 1 AND al06 < 5 THEN 4
+       WHEN calculated AL01_1 = 1 AND al06 = 1 THEN 5
+  END AS AL06_1,
+  
+  /* AL06_2: RSOD at least weekly */
+     case 
+        when calculated AL06_1 > 3 then 1
+        when calculated AL06_1 < 4 then 0
+     end as AL06_2,
+     
+     /* AL07_1: Frequency of binge drinking */
+    case 
+    when calculated AL01_1 = 2 OR calculated AL06_1 = 1 then 0
+    when al07 < 3 then 4
+    when al07 = 3 then 3
+    when al07 = 4 then 2
+    when al07 > 4 then 1
+  end as AL07_1,
+     /* AL08_1: Age at start of drinking */
+    case
+   when al08 < 10 then al08 = 10 
+   when 0 < al01 < 9 then al08
+   else -3
+  end as AL08_1,
+
+/* Next case*/
+case 
+        when calculated AL01_5 = 1 and al0901 = 1 then 2
+        else al0901
+    end as adj_al0901,
+    
+    case 
+        when calculated AL01_5 = 1 and al1001 = 1 then 2
+        else al1001
+    end as adj_al1001,
+    
+    case 
+        when calculated AL01_5 = 1 and al1101 = 1 then 2
+        else al1101
+    end as adj_al1101,
+    
+    case 
+        when calculated AL01_5 = 1 and al1201 = 1 then 2
+        else al1201
+    end as adj_al1201,
+
+    /* Step 2: Recode al09–al12 to binary */
+    case when al09 = 1 then 1 when al09 = 2 then 0 else . end as N9,
+    case when al10 = 1 then 1 when al10 = 2 then 0 else . end as N10,
+    case when al11 = 1 then 1 when al11 = 2 then 0 else . end as N11,
+    case when al12 = 1 then 1 when al12 = 2 then 0 else . end as N12,
+
+    /* Step 3: Create A9–A12: lifetime problems */
+    case 
+        when al09 = 1 or calculated adj_al0901 in (1,2) then 1
+        when al09 = 2 or calculated AL01_4 = 1 then 0
+        else .
+    end as A9,
+
+    case 
+        when al10 = 1 or calculated adj_al1001 in (1,2) then 1
+        when al10 = 2 or calculated AL01_4 = 1 then 0
+        else .
+    end as A10,
+
+    case 
+        when al11 = 1 or calculated adj_al1101 in (1,2) then 1
+        when al11 = 2 or calculated AL01_4 = 1 then 0
+        else .
+    end as A11,
+
+    case 
+        when al12 = 1 or calculated adj_al1201 in (1,2) then 1
+        when al12 = 2 or calculated AL01_4 = 1 then 0
+        else .
+    end as A12,
+
+    /* Step 4: Sum CAGE for lifetime */
+    calculated A9 + calculated A10 + calculated A11 + calculated A12 as cage_LT,
+
+    /* AL_1 indicator */
+    case 
+        when calculated AL04_1 = 1 then 2
+        when calculated cage_LT > 1 then 1
+        when calculated cage_LT < 2 then 2
+        else .
+    end as AL_1,
+
+    /* Step 5: Sum CAGE for past year */
+    calculated N9 + calculated N10 + calculated N11 + calculated N12 as cage_PY,
+
+    /* AL_2 indicator */
+    case 
+        when calculated AL04_1 = 1 then 2
+        when calculated AL_1 = 2 then 2
+        when calculated AL_1 = 1 and calculated cage_PY > 1 then 1
+        when calculated AL_1 = 1 and calculated cage_PY < 2 then 2
+        else .
+    end as AL_2,
+    
+    /* GA01_1: Spent money on gambling in past 12 months */
+    ga01 as GA01_1,
+
+    /* On-location gambling frequency */
+    min(ga0201,ga0202, ga0203 ,ga0204, ga0205, ga0206, ga0207, ga0208, ga0209) as on_loca,
+
+    /* GA02_1: Gambled on location in past 12 months */
+    case
+        when calculated on_loca > 0 and calculated on_loca < 5 then 1
+        when ga01 = 2 or calculated on_loca > 4 then 2
+        else .
+    end as GA02_1,
+
+    /* GA02_2: Gambled on location at least once a week */
+    case
+        when calculated on_loca > 0 and calculated on_loca < 3 then 1
+        when ga01 = 2 or calculated on_loca > 2 then 2
+        else .
+    end as GA02_2,
+
+    /* Online gambling frequency */
+    min(ga0301, ga0302, ga0303, ga0304, ga0305, ga0306, ga0307, ga0308,ga0309) as on_line,
+
+    /* GA03_1: Gambled online in past 12 months */
+    case
+        when calculated on_line > 0 and calculated on_line < 5 then 1
+        when ga01 = 2 or calculated on_line > 4 then 2
+        else .
+    end as GA03_1,
+
+    /* GA03_2: Gambled online at least once a week */
+    case
+        when calculated on_line > 0 and calculated on_line < 3 then 1
+        when ga01 = 2 or calculated on_line > 2 then 2
+        else .
+    end as GA03_2,
+
+    /* GA_1: Weekly gambling on same game */
+    case
+        when calculated GA02_2 = 1 or calculated GA03_2 = 1 then 1
+        when ga01 = 2 or (calculated GA02_2 = 2 and calculated GA03_2 = 2) then 2
+        else .
+    end as GA_1,
+
+    /* GA_2: Daily gambling on same game */
+    case
+        when calculated on_loca = 1 or calculated on_line = 1 then 1
+        when ga01 = 2 or (calculated on_loca > 1 and calculated on_line > 1) then 2
+        else .
+    end as GA_2,
+
+    /* GA_3: Preferred vector for gambling */
+    case
+        when GA01_1 = 1 and calculated GA02_1 = 1 and calculated GA03_1 = 2 then 1
+        when GA01_1 = 1 and calculated GA02_1 = 2 and calculated GA03_1 = 1 then 2
+        when GA01_1 = 1 and calculated GA02_1 = 1 and calculated GA03_1 = 1 then 3
+        else -3
+    end as GA_3,
+
+    /* GA04_1: Spends 40€ or more per month on gambling */
+    case
+        when ga01 = 2 then 2
+        when ga01 = 1 then ga04
+        else .
+    end as GA04_1,
+
+    /* GA04_2: Average monthly expenses for gambling (if over 40€) */
+    case
+        when calculated GA04_1 = 1 then ga04a
+        else -3
+    end as GA04_2,
+
+/* GA05: Sum of reversed scores (3 = always, 0 = never) */
+    (4 - ga0501) + (4 - ga0502) + (4 - ga0503) + (4 - ga0504) +
+    (4 - ga0505) + (4 - ga0506) + (4 - ga0507) + (4 - ga0508) + (4 - ga0509) as GA05,
+
+    /* GA05_1: Level of problematic gambling */
+    case
+        when GA01_1 = 2 or calculated GA04_1 = 2 then 0
+        when calculated GA05 = 0 then 0
+        when calculated GA05 in (1, 2) then 1
+        when calculated GA05 between 3 and 7 then 2
+        when calculated GA05 > 7 then 3
+        else .
+    end as GA05_1,
+
+ 
+    /* GA06_1: Consultation for problematic gambling */
+    case
+        when calculated GA04_1 = 2 then 2
+        when calculated GA04_1 = 1 then ga06
+        else .
+    end as GA06_1,
+    
+
+    /* ID01_1: Lifetime cannabis use */
+        case 
+            when 15 <= hc_01<= 64 and ID01 = 1 then 1
+            when 15 <= hc_01<= 64 and ID01 = 2 then 2
+            else -3
+        end as ID01_1,
+        
+        /* ID02_1: hc_01of onset */
+        case 
+            when 15 <= hc_01<= 64 and ID01 = 1 then ID02
+            else -3 
+        end as ID02_1,
+
+        /* ID03_1: Past 12-month use */
+        case 
+            when 15 <= hc_01<= 64 and ID01 = 1 and ID03 = 1 then 1
+            when 15 <= hc_01<= 64 and ID03 = 2 or ID01 = 2 then 2 
+            else -3
+        end as ID03_1,
+
+        /* ID03_2: Quitters among ever users */
+        case 
+            when 15 <= hc_01<= 64 and ID01 = 1 and calculated ID03_1 = 2 then 1
+            when 15 <= hc_01<= 64 and ID01 = 1 and calculated ID03_1 = 1 then 2
+            when 15 <= hc_01<= 64 and ID01 = 2 then -3
+            else -3
+        end as ID03_2,
+
+        /* ID03_3: Quitters among full population */
+        case
+            when 15 <= hc_01<= 64 and ID01 = 1 and calculated ID03_1 = 2 then 1
+            when 15 <= hc_01<= 64 and ID01 = 1 and calculated ID03_1 = 1 then 2
+            when 15 <= hc_01<= 64 and ID01 = 2 then 2
+            else -3
+        end as ID03_3,
+
+        /* CAST total score */
+        sum(ID0401, ID0402, ID0403, ID0404, ID0405, ID0406) as TOT,
+
+        /* ID04_1: CAST risk level */
+        case 
+            when 15 <= hc_01<= 64 and ID01 = 2 or calculated ID03_1 = 2 then 0
+            when 15 <= hc_01<= 64 and calculated TOT < 3 then 0
+            when 15 <= hc_01<= 64 and calculated TOT < 7 then 1
+            when 15 <= hc_01<= 64 and calculated TOT >= 7 then 2
+            else -3
+        end as ID04_1,
+
+        /* ID04_2: Problematic use */
+        case 
+            when 15 <= hc_01<= 64 and  calculated ID04_1 < 1 then calculated ID04_1
+            when 15 <= hc_01<= 64 and calculated ID04_1 > 0 then 1
+            else -3
+        end as ID04_2,
+
+        /* ID05_1: Use in past 30 days */
+        case 
+            when 15 <= hc_01<= 64 and calculated ID03_1 = 1 and ID05 = 1 then 1
+            when 15 <= hc_01<= 64 and calculated ID01_1 = 2 or calculated ID03_1 = 2 or ID05 = 2 then 2
+            else -3
+        end as ID05_1,
+
+        /* ID06_1: Intensity of use */
+        case 
+            when 15 <= hc_01<= 64 and calculated ID05_1 = 1 and ID06 < 3 then 1
+            when 15 <= hc_01<= 64 and calculated ID05_1 = 1 and ID06 = 3 then 2
+            when 15 <= hc_01<= 64 and calculated ID05_1 = 1 and ID06 > 3 then 3
+            else -3
+        end as ID06_1,
+
+        /* ID06_2: Intensive users */
+        case
+            when 15 <= hc_01<= 64 and calculated ID05_1 = 2 then 2
+            when 15 <= hc_01<= 64 and calculated ID06_1 = 1 then 1
+            when 15 <= hc_01<= 64 and calculated ID06_1 > 1 then 2
+            else -3
+        end as ID06_2,
+
+        /* ID07_1: Lifetime other drug use */
+        case 
+            when 15 <= hc_01<= 64 and sum(ID0701, ID0702, ID0703, ID0704, ID0705, ID0706, ID0707, ID0708, ID0709, ID0710, ID0711) = 0 then 2
+            when 15 <= hc_01<= 64 and sum(ID0701, ID0702, ID0703, ID0704, ID0705, ID0706, ID0707, ID0708, ID0709, ID0710, ID0711) > 0 then 1
+            else -3
+        end as ID07_1,
+
+        /* MAX7: Max of other drug variables */
+        max(ID0701, ID0702, ID0703, ID0704, ID0705, ID0706, ID0707, ID0708, ID0709, ID0710, ID0711) as MAX7,
+
+        /* ID07_2: Past 12-month use of other drug */
+        case 
+            when 15 <= hc_01<= 64 and calculated ID07_1 = 1 and calculated MAX7 > 1 then 1
+            when 15 <= hc_01<= 64 and calculated ID07_1 = 2 or calculated MAX7 < 2 then 2
+            else -3
+        end as ID07_2,
+
+        /* ID07_3: Past month use of other drug */
+        case 
+            when 15 <= hc_01<= 64 and calculated ID07_1 = 1 and calculated MAX7 > 2 then 1
+            when 15 <= hc_01<= 64 and calculated ID07_1 = 2 or calculated MAX7 < 3 then 2
+            else -3
+        end as ID07_3,
+
+        /* ID7_1 to ID7_11: Individual drug use indicators */
+     
+        case when 15 <= hc_01 and hc_01 <= 64 and id0701 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0701 < 2 then 2 
+     else -3 end as ID7_1,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0702 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0702 < 2 then 2 
+     else -3 end as ID7_2,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0703 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0703 < 2 then 2 
+     else -3 end as ID7_3,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0704 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0704 < 2 then 2 
+     else -3 end as ID7_4,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0705 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0705 < 2 then 2 
+     else -3 end as ID7_5,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0706 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0706 < 2 then 2 
+     else -3 end as ID7_6,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0707 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0707 < 2 then 2 
+     else -3 end as ID7_7,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0708 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0708 < 2 then 2 
+     else -3 end as ID7_8,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0709 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0709 < 2 then 2 
+     else -3 end as ID7_9,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0710 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0710 < 2 then 2 
+     else -3 end as ID7_10,
+
+case when 15 <= hc_01 and hc_01 <= 64 and id0711 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0711 < 2 then 2 
+     else -3 end as ID7_11,
+     
+case when 15 <= hc_01 and hc_01 <= 64 and id0712 > 1 then 1 
+     when 15 <= hc_01 and hc_01 <= 64 and id0712 < 2 then 2 
+     else -3 end as ID7_12,
+
+
+        /* ID_1: Use of several drugs including cannabis */
+        case
+            when 15 <= hc_01<= 64 and calculated ID03_1 = 1 and calculated ID07_2 = 1 then 1
+            when 15 <= hc_01<= 64 and calculated ID03_1 = 2 and calculated ID07_2 = 2 then 2
+            when 
+                (sum(
+                    case when 15 <= hc_01<= 64 and calculated ID7_1 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_2 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_3 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_4 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_5 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_6 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_7 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_8 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_9 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_10 = 1 then 1 else 0 end,
+                    case when 15 <= hc_01<= 64 and calculated ID7_11 = 1 then 1 else 0 end
+                ) > 1) then 1
+                else -3
+        end as ID_1,
+/* TA01_1: CURRENT SMOKER */
+        case 
+            when hc_01 >= 15 and (ta01 = 2 or ta02 = 2 or (ta02 = 1 and ta06 = 3)) then 2
+            when hc_01 >= 15 and ta02 = 1 and ta06 in (1, 2) then 1
+            else .
+        end as TA01_1,
+
+        /* TA01_2: AGE AT FIRST WHOLE CIGARETTE */
+        case 
+            when hc_01 >= 15 and ta01 = 1 then ta02
+            when ta01 =2 then -3
+            else .
+        end as TA01_2,
+
+        /* TA03_1: EVER DAILY SMOKING (FOR OVER A YEAR) */
+        case 
+            when hc_01 >= 15 and ta01 = 1 and ta02 = 1 and ta03 = 1 and ta05 > 0 then 1
+            when hc_01 >= 15 and (
+                (ta01 = 1 and ta02 = 1 and ta03 = 1 and ta05 = 0) or 
+                (ta01 = 1 and ta02 = 1 and ta03 = 2) or 
+                (ta01 = 2 or ta02 = 2)) then 2
+            else .
+        end as TA03_1,
+
+        /* TA04_1: AGE AT START OF DAILY SMOKING */
+        case 
+            when hc_01 >= 15 and ta01 = 1 and ta02 = 1 and ta03 = 1 then ta04
+            else -3
+        end as TA04_1,
+
+        /* TA05_1: NUMBER OF YEARS OF DAILY SMOKING */
+        case 
+            when hc_01 >= 15 and calculated TA03_1 = 1 then ta05
+            else 0
+        end as TA05_1,
+
+        /* TA06_1: SMOKING STATUS */
+        case 
+            when hc_01 >= 15 and ta01 = 1 and ta02 = 1 then ta06
+            when hc_01 >= 15 and (ta01 = 2 or ta02 = 2) then 4
+            else .
+        end as TA06_1,
+
+        /* TA06_2: EVER SMOKER */
+        case 
+            when hc_01 >= 15 and calculated TA06_1 < 4 then 1
+            when hc_01 >= 15 and calculated TA06_1 = 4 then 2
+            else .
+        end as TA06_2,
+
+        /* TA06_3: DAILY SMOKER */
+        case 
+            when hc_01 >= 15 and calculated TA06_1 = 1 then 1
+            when hc_01 >= 15 and calculated TA06_1 > 1 then 2
+            else .
+        end as TA06_3,
+
+        /* TA06_4: QUIT SMOKING */
+        case 
+            when hc_01 >= 15 and calculated TA06_1 = 3 then 1
+            when hc_01 >= 15 and calculated TA06_1 < 3 then 2
+            when calculated TA06_1 =4 then -3
+            else .
+        end as TA06_4,
+
+        /* TA07_1: NUMBER OF CIGARETTES PER DAY */
+        case 
+            when hc_01 >= 15 and ta0701 > 0 then ta0701
+            else -3
+        end as TA07_1,
+
+        /* TA07_2: SMOKING SEVERITY */
+        case 
+            when hc_01 >= 15 and calculated TA07_1 > 19 then 1
+            when hc_01 >= 15 and (
+                calculated TA07_1 < 20 or 
+                sum(ta0702, ta0703, ta0704, ta0705) > 0 or 
+                calculated TA06_1 = 2
+            ) then 2
+            when hc_01 >= 15 and calculated TA06_1 > 2 then 3
+            else .
+        end as TA07_2,
+
+        /* TA07_3: HEAVY SMOKERS (20+ PER DAY) */
+        case 
+            when hc_01 >= 15 and calculated TA07_2 = 1 then 1
+            when hc_01 >= 15 and calculated TA07_2 > 1 then 2
+            else .
+        end as TA07_3,
+
+        /* TA08_1: TOBACCO DEPENDENCE */
+        case 
+            when hc_01 >= 15 and calculated TA06_3 = 1 then
+                case 
+                    when calculated ta07_1 < 11 then 
+                        case when (0 + (4 - ta08)) < 3 then 5
+                             when (0 + (4 - ta08)) = 3 then 4
+                             when (0 + (4 - ta08)) = 4 then 3
+                             when (0 + (4 - ta08)) = 5 then 2
+                             when (0 + (4 - ta08)) = 6 then 1
+                             else -3
+                        end
+                    when 10 < calculated ta07_1 < 21 then 
+                        case when (1 + (4 - ta08)) < 3 then 5
+                             when (1 + (4 - ta08)) = 3 then 4
+                             when (1 + (4 - ta08)) = 4 then 3
+                             when (1 + (4 - ta08)) = 5 then 2
+                             when (1 + (4 - ta08)) = 6 then 1
+                             else -3
+                        end
+                    when 20 < calculated ta07_1 < 31 then 
+                        case when (2 + (4 - ta08)) < 3 then 5
+                             when (2 + (4 - ta08)) = 3 then 4
+                             when (2 + (4 - ta08)) = 4 then 3
+                             when (2 + (4 - ta08)) = 5 then 2
+                             when (2 + (4 - ta08)) = 6 then 1
+                             else -3
+                        end
+                    when calculated ta07_1 > 30 then 
+                        case when (3 + (4 - ta08)) < 3 then 5
+                             when (3 + (4 - ta08)) = 3 then 4
+                             when (3 + (4 - ta08)) = 4 then 3
+                             when (3 + (4 - ta08)) = 5 then 2
+                             when (3 + (4 - ta08)) = 6 then 1
+                             else -3
+                        end
+                    else -3
+                end
+            else -3
+        end as TA08_1,
+
+        /* TA08_2: STRONG TOBACCO DEPENDENCE */
+        case 
+            when hc_01 >= 15 and calculated TA08_1 in (1, 2) then 1
+            when hc_01 >= 15 and (calculated TA08_1 > 2 or calculated TA06_3 = 2) then 2
+            else .
+        end as TA08_2,
+
+        /* TA08_3: FIRST CIGARETTE WITHIN 60 MINUTES */
+        case 
+            when hc_01 >= 15 and calculated TA06_3 = 1 and ta08 < 4 then 1
+            when hc_01 >= 15 and calculated TA06_3 = 1 and ta08 > 3 then 2
+            when hc_01 >= 15 and calculated TA06_3 = 2 then -3
+            else .
+        end as TA08_3,
+
+        /* TA09_1: QUIT ATTEMPT AMONG DAILY SMOKERS */
+        case 
+            when hc_01 >= 15 and calculated TA06_3 = 1 and ta09 in (1, 2) then 1
+            when hc_01 >= 15 and calculated TA06_3 = 1 and ta09 = 3 then 2
+            else -3
+        end as TA09_1,
+
+        /* TA10_1: TIME SINCE LAST QUIT ATTEMPT */
+        case 
+            when hc_01 >= 15 and calculated TA06_3 = 1 then ta10
+            else -3
+        end as TA10_1,
+
+        /* TA13_1: REDUCTION IN SMOKING */
+        case 
+            when hc_01 >= 15 and calculated TA06_1 = 2 and ta13 = 2 then 1
+            when hc_01 >= 15 and calculated TA06_1 = 2 and ta13 in (1, 3) then 2
+            else -3
+        end as TA13_1,
+/* PA01_1: Intensity of work-related physical activity (entire population 15+) */
+        PA01 as PA01_1,
+
+        /* PA02_1: Days walking to/from places (0–7) */
+        PA02 as PA02_1,
+
+        /* PA02_2: Binary indicator for walking at least one day */
+        case 
+            when PA02 >= 1 then 1
+            when PA02 = 0 then 2
+            else . 
+        end as PA02_2,
+
+        /* PA04_1: Days cycling to/from places (0–7) */
+        PA04 as PA04_1,
+
+        /* PA04_2: Binary indicator for cycling at least one day */
+        case 
+            when PA04 >= 1 then 1
+            when PA04 = 0 then 2
+            else . 
+        end as PA04_2,
+       /* Direct assignments (simple recodes) */
+        VI01 as VI01_1,
+        VI0201 as VI02_1,
+        VI0211 as VI02_5,
+        VI0212 as VI02_6,
+        VI0213 as VI02_7,
+        VI0214 as VI02_8,
+        VI0301 as VI0301_1,
+        VI0302 as VI0302_1,
+        VI0303 as VI0303_1,
+        VI0304 as VI0304_1,
+        VI0305 as VI0305_1,
+        VI0306 as VI0306_1,
+        VI0307 as VI0307_1,
+        VI0308 as VI0308_1,
+        VI0309 as VI0309_1,
+        VI0310 as VI0310_1,
+        VI0311 as VI0311_1,
+        VI04 as VI04_1,
+
+        /* VI02_2: Verbal or psychological violence */
+        case 
+            when VI0202 = -1 then -1
+            when VI0202 = 2 then 2
+            when VI0202 = 1 or VI0203 = 1 or VI0204 = 1 then 1
+            else -3 
+        end as VI02_2,
+
+        /* VI02_3: Physical violence (not including sexual) */
+        case 
+            when VI0205 = -1 then -1
+            when VI0205 = 2 then 2
+            when VI0205 = 1 or VI0206 = 1 then 1
+            else -3 
+        end as VI02_3,
+
+        /* VI02_3B: Physical violence including sexual */
+        case 
+            when VI0205 = -1 then -1
+            when VI0205 = 2 then 2
+            when VI0205 = 1 or VI0206 = 1 or VI0207 = 1 or VI0208 = 1 then 1
+            else -3 
+        end as VI02_3B,
+
+        /* VI02_4: Sexual violence */
+        case 
+            when VI0207 = -1 then -1
+            when VI0207 = 2 then 2
+            when VI0207 = 1 or VI0208 = 1 then 1
+            else -3 
+        end as VI02_4,
+
+        /* VI04_2: Intra-family violence */
+        case
+            when VI04 in (5,6,7,8,9) then 1
+            when VI01 in (1,2) then 2
+            when VI01 = -3 then -3
+            else -1
+        end as VI04_2,
+
+        /* VI04_3: Partner violence (age 18-74) */
+        case
+            when VI04 in (5,6) and HC_01 between 18 and 74 then 1
+            when VI01 in (1,2) and HC_01 between 18 and 74 then 2
+            when VI01 = -3 or HC_01 < 18 or HC_01 > 74 then -3
+            else -1
+        end as VI04_3,
+        /* RH02_2: First sex under 15 */
+        case 
+            when RH01 in (2, -1) then -3
+            when RH02 > 0 and RH02 < 15 then 1
+            when RH02 >= 15 then 2
+            else .
+        end as RH02_2,
+
+        /* RH03_1: Had sex in past 12 months */
+        RH03 as RH03_1,
+
+        /* RH04_1: More than one sexual partner in past 12 months */
+        case 
+            when RH04 > 1 then 1
+            when RH04 = 1 then 2
+            else .
+        end as RH04_1,
+       
+       /*RH_1*/
+        CASE
+        WHEN hc_01 >= 15 AND hc_01 <= 64 AND RH03 = 1 and 
+        calculated RH04_1=1 and RH05=1 then 1
+       WHEN hc_01 >= 15 AND hc_01 <= 64 AND RH03 = 1 and 
+        calculated RH04_1=1 and RH05=2 then 2
+        when calculated RH04_1=2 or calculated RH04_1=-3 then -3
+        end as RH_1,
+       
+       /*RH06_1 */
+        CASE
+        WHEN HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH03 = 1 THEN RH06
+        ELSE -3
+    END AS RH06_1,
+
+        /* RH07_2: Condensed type of contraception */
+        case 
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0701 = 1 then 1
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0702 or RH0705 = 1 then 2
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0703 = 1 or RH0704 = 1 then 3
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0706 = 1 then 4
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0707 = 1 then 5
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0708 = 1 or RH0709 = 1 or RH0710 = 1 or RH0711 = 1 then 6
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0714 = 1 or RH0715 = 1 then 7
+            when HC04 = 2 AND hc_01 >= 15 AND hc_01 <= 49 AND RH0712 = 1 or RH0713 = 1 then 8
+            else -3
+        end as RH07_2,
+        /* VT01_1: Mean satisfaction score */
+        VT01 as VT01_1,
+
+        /* VT01_2: Level of satisfaction */
+        case 
+            when VT01 between 0 and 5 then 1
+            when VT01 between 6 and 8 then 2
+            when VT01 in (9, 10) then 3
+            else .
+        end as VT01_2,
+
+        /* VT02_1: Mean vitality score from VT0201 to VT0204 */
+        /* Step 1: Count missing values */
+        (case when VT0201 is missing then 1 else 0 end +
+         case when VT0202 is missing then 1 else 0 end +
+         case when VT0203 is missing then 1 else 0 end +
+         case when VT0204 is missing then 1 else 0 end) as vt_mis,
+
+        /* Step 2: Compute vitality score if ≤ 2 items missing */
+        case 
+            when 
+                (case when VT0201 is missing then 1 else 0 end +
+                 case when VT0202 is missing then 1 else 0 end +
+                 case when VT0203 is missing then 1 else 0 end +
+                 case when VT0204 is missing then 1 else 0 end) < 3
+            then 
+                100 * (
+                    mean(
+                        (case when VT0201 is not missing then (6 - VT0201) else . end),
+                        (case when VT0202 is not missing then (6 - VT0202) else . end),
+                        VT0203,
+                        VT0204
+                    ) - 1
+                ) / 4
+            else .
+        end as VT02_1,
+
+        /* VT02_2: Optimal vitality */
+        case 
+            when calculated VT02_1 > 78.4 then 1
+            when calculated VT02_1 < 78.5 then 2
+            else .
+        end as VT02_2,
+
+        /* WB_1: GHQ-12 score: 0-0-1-1 scoring */
+        /*Done in data step;*/
+        /* WB_2: Psychological distress (GHQ-2+) */
+        case
+            when  WB_1 in (0,1)    then 2
+            when  WB_1 between 2 and 12 then 1
+            else .
+        end                    as WB_2,
+        /* WB_3: Psychological impairment (GHQ-4+) */
+        case
+            when  WB_1 between 0 and 3  then 2
+            when  WB_1 between 4 and 12 then 1
+            else .
+        end                    as WB_3,
+        
+        /*ET_2*/
+         case
+            when ET01 = 1 and hc_01 >= 6 then
+                case
+                    when ET02 in (1) then 1
+                    when ET02 = 2 then 2
+                    when ET02 in (3,4) then 3
+                    when ET02 in (5,6,7,8,9,10,11,12,13,14) then 4
+                    end
+        end as ET_2,
+        
+        /*ET_3*/
+        case
+            when ET03 in (1,2) then 1
+            when ET03 = 3 then 2
+            when ET03 in (4,5) then 3
+            when ET03 in (6,7,8,9,10) then 4
+            when ET03 in (11) then 5
+            else .
+        end as ET_3,
+
+        Reconstruction_input_WB_1_ETs.*
+
+FROM work.Reconstruction_input_WB_1_ETs;
+quit;
+
+#Flagging for diagnostics
+data my_reconstructed_data;
+    set reconstructed_indicators;
+    drop A9 A10 A11 A12 MAX7 N9 N10 N11 N12 adj_al0901 adj_al1001 adj_al1201 adj_al1101
+    AL_35 GA05 TOT on_line on_loca cage_LT cage_PY
+    vt_mis edu_level_raw edu_level _mult_ ;
+run;
+
+%selectVars(libname=work,datanm=my_reconstructed_data,range=hc_01 -- ET_1);
+%put &lstvars.;
+
+data my_reconstructed_data;
+    set reconstructed_indicators;
+    drop A9 A10 A11 A12 MAX7 N9 N10 N11 N12 adj_al0901 adj_al1001 adj_al1201 adj_al1101
+    AL_35 GA05 TOT on_line on_loca cage_LT cage_PY
+    vt_mis edu_level_raw edu_level ;
+run;
+
+##Macro to create 0,1 flags
+%macro gen_flag(varlist);
+    %local n i var condition;
+    %let n = %sysfunc(countw(&varlist, %str( )));
+    %let condition=;
+    %do i = 1 %to &n;
+        %let var = %scan(&varlist, &i, %str( ));
+     %if &var. ~= id_anom_e5 & &var. ~= wfin & &var. ~=  hh_cluster_e5 & &var. ~= age5 & &var. ~= age8 & &var. ~= age5y
+     & &var. ~= prov & &var. ~= provw & &var. ~= particip & &var. ~= age9 & &var. ~= hc_01 & &var. ~= hc01
+     & &var. ~= hc04 & &var. ~= hc05 & &var. ~= regio & &var. ~= selfstat & &var. ~= Urb1 
+     & &var. ~= dateenq& &var. ~= year & &var. ~= ses_brx & &var. ~= _MULT_ %then 
+     
+       %let condition = &condition coalesce(i.&var.,-3) as &var., case when o.&var.=-1 then 1 else 0 end as flag_&var.,;
+    %else %let condition = &condition o.&var.,;
+    %end;
+    &condition
+%mend;
+%let condition = %gen_flag(&lstvars);
+%put &condition;
+
+ 
+proc sql ;
+create table Full_revert_all_imp_FINALE as
+select
+	 &condition.  _MULT_
+from particip o 
+join my_reconstructed_data i on o.id_anom_e5=i.id_anom_e5
+;
+run;
+
+#Diagnostics
+proc sql;
+create table imp2plot as
+select TA0101, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_TA0101 = 0
+	and TA0101  ne -3
+union all
+select TA0101, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where TA0101  ne -3
+;
+
+proc sgplot data=work.imp2plot;
+  density TA0101 / lineattrs=(pattern=shortdash) group=group_ind;
+  keylegend / title="0 = Observed, 1 = Imputed";
+  xaxis label="TA0101";
+  yaxis label="Density";
+run;
+
+GA04_2(96%) missing;
+
+proc sql;
+create table imp2plot as
+select GA04_2, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_GA04_2 = 0
+	and GA04_2  ne -3
+union all
+select GA04_2, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where GA04_2  ne -3
+;
+
+proc sgplot data=work.imp2plot;
+  density GA04_2 / lineattrs=(pattern=shortdash) group=group_ind;
+  keylegend / title="0 = Observed, 1 = Imputed";
+  xaxis label="Average monthly expenses for gambling";
+  yaxis label="Density";
+run;
+
+Age at immigration (76%);
+
+proc sql;
+create table imp2plot as
+select HC08_1, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_HC08_1 = 0
+	and HC08_1  ne -3
+union all
+select HC08_1, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where HC08_1  ne -3
+;
+
+proc sgplot data=work.imp2plot;
+  density HC08_1 / lineattrs=(pattern=shortdash) group=group_ind;
+  keylegend / title="0 = Observed, 1 = Imputed";
+  xaxis label="Age at immigration";
+  yaxis label="Density";
+run;
+
+
+Age at first intercourse 25%;
+proc sql;
+create table imp2plot as
+select RH02, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_RH02 = 0
+	and RH02  ne -3
+union all
+select RH02, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where RH02  ne -3
+;
+proc sgplot data=work.imp2plot;
+  density RH02 / lineattrs=(pattern=shortdash) group=group_ind;
+  keylegend / title="0 = Observed, 1 = Imputed";
+  xaxis label="Age at first intercourse";
+  yaxis label="Density";
+run;
+
+Number of cigars/cigarillos smoked daily
+proc sql;
+create table imp2plot as
+select ta0702, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_ta0702 = 0
+	and ta0702  ne -3
+union all
+select ta0702, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where ta0702  ne -3
+;
+
+proc sgplot data=work.imp2plot;
+  density ta0702 / type=normal lineattrs=(pattern=shortdash) group=group_ind;
+  keylegend / title="0 = Observed, 1 = Imputed";
+  xaxis label="Number of cigars/cigarillos smoked daily";
+  yaxis label="Density";
+run;
+
+VT01_2-Life satisfaction
+proc sql;
+create table imp2plot as
+select VT01_2, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_VT01_2 = 0
+	and VT01_2  ne -3
+union all
+select VT01_2, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where VT01_2  ne -3
+;
+
+proc freq data=imp2plot;
+by group_ind;
+tables VT01_2 / out=bar_VT01_2;
+run;
+
+proc sgplot data=bar_VT01_2;
+  vbar VT01_2 / response=percent group=group_ind groupdisplay=cluster;
+  yaxis label="Percent";
+  xaxis label="Life satisfaction";
+  keylegend / title="Group";
+run;
+
+Physical activity
+proc sql;
+create table imp2plot as
+select PA10_1, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_PA10_1 = 0
+	and PA10_1  ne -3
+union all
+select PA10_1, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where PA10_1  ne -3
+;
+proc freq data=imp2plot;
+by group_ind;
+tables PA10_1 / out=bar_PA10_1;
+run;
+
+proc sgplot data=bar_PA10_1;
+  vbar PA10_1 / response=percent group=group_ind groupdisplay=cluster;
+  yaxis label="Percent";
+  xaxis label="Physical activity";
+  keylegend / title="Group";
+run;
+
+Health related quality of life
+proc sql;
+create table imp2plot as
+select QL_1, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_QL_1 = 0
+	and QL_1  ne -3
+union all
+select QL_1, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where QL_1  ne -3
+;
+
+proc freq data=imp2plot;
+by group_ind;
+tables QL_1 / out=bar_QL_1;
+run;
+
+proc sgplot data=bar_QL_1;
+  vbar QL_1 / response=percent group=group_ind groupdisplay=cluster;
+  yaxis label="Percent";
+  xaxis label="Quality of life";
+  keylegend / title="Group";
+run;
+
+Past 12 months frequency of alcohol consumption
+proc sql;
+create table imp2plot as
+select al01, 0 as group_ind
+from Full_revert_all_imp_FINALE
+where Flag_al01 = 0
+	and al01  ne -3
+union all
+select al01, 1 as group_ind
+from Full_revert_all_imp_FINALE
+where al01  ne -3
+;
+
+proc freq data=imp2plot;
+by group_ind;
+tables al01 / out=bar_al01;
+run;
+
+proc sgplot data=bar_al01;
+  vbar al01 / response=percent group=group_ind groupdisplay=cluster;
+  yaxis label="Percent";
+  xaxis label= "Past 12 months frequency of alcohol consumption";
+  keylegend / title="Group";
+run;
+
+#Macro to drop the flags for modeling
+%macro drop_vars_with_prefix(data=, out=, prefix=);
+    /* Step 1: Get variable names with the given prefix */
+    proc sql noprint;
+        select name 
+        into :dropvars separated by ' '
+        from dictionary.columns
+        where libname='WORK' 
+              and memname = upcase("&data") 
+              and upcase(name) like upcase("&prefix%"); 
+    quit;
+
+    /* Step 2: Drop those variables if any are found */
+    %if %length(&dropvars) > 0 %then %do;
+        data &out;
+            set &data;
+            drop &dropvars;
+        run;
+    %end;
+    %else %do;
+        %put NOTE: No variables starting with "&prefix" found in &data.;
+        data &out;
+            set &data;
+        run;
+    %end;
+%mend;
+
+%drop_vars_with_prefix(data=Full_revert_all_imp_FINALE, out=Reverted_and_clean_imputations, prefix=flag_);
+
+proc means data=Reverted_and_clean_imputations nmiss;
+run;
+
+#Imputation model
+data subset;
+set Reverted_and_clean_imputations
+(keep= ID_ANOM_e5 hh_cluster_e5 HC04  ET_3  IN_1 QL_1 PA10_1 AL05_3 
+    TA06_1 ID_1 RH04_1 VT01_2 VI01_1 Urb1 WB_2 age8 wfin PROVW _mult_);
+run;
+
+DATA subset;
+  SET subset;
+  ARRAY num_vars(*) _NUMERIC_;
+  DO i = 1 TO DIM(num_vars);
+    IF num_vars(i) IN (-3) THEN num_vars(i) = 0;
+  END;
+  
+RUN;
+
+proc sort data=subset;
+by _mult_ ;
+run;
+
+data stacked_imp;
+  set subset;
+  do threshold = 1 to 2;
+    response = (VT01_2 <= threshold);
+    z = threshold - 1; /*Intercept of of 2nd logit, where threshold = 2*/
+    m =1-z;
+    output;
+  end;
+run;
+
+proc sort data=stacked_imp;
+by _mult_ ;
+run;
+
+PROC SURVEYLOGISTIC DATA=stacked_imp;
+by _mult_;
+  STRATA provw;
+  CLUSTER hh_cluster_e5;
+  WEIGHT wfin;
+  CLASS z(ref='1') 
+    age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04
+      
+    /param=ref;
+  MODEL VT01_2(order=internal) = z age8*z QL_1*z VI01_1 PA10_1*z TA06_1 ID_1*z Urb1 RH04_1*z hc04
+ID_1*VI01_1
+QL_1*PA10_1 
+RH04_1*Urb1
+
+/ LINK=CUMLOGIT covb maxiter=1000;
+  OUTPUT OUT=logreg_imputeds PRED=predicted CUMPRED =cumpred;
+  ods output ParameterEstimates=lgsparms (where=(_Mult_ ne .))
+              CovB=lgscovb parminfo = pinfo;
+RUN;
+ods select all;
+
+
+data lgsparms;
+  set lgsparms(rename=(_mult_=_Imputation_));
+run;
+
+data lgscovb;
+  set lgscovb(rename=(_mult_=_Imputation_));
+run;
+
+data lgsparms_1;
+    set lgsparms;
+    if Variable = 'Intercept' and ClassVal0 = 1 then Variable = 'Intercept_1';
+    else if Variable = 'Intercept' and ClassVal0 = 2 then Variable = 'Intercept_2';
+run;
+
+proc MIANALYZE parms(classvar=classval)=lgsparms_1 covb(EFFECTVAR=stacking)=lgscovb ;
+ class z age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04;
+ modeleffects  Intercept_1 Intercept_2 z z*AGE8 z*QL_1 VI01_1 z*PA10_1 TA06_1 z*ID_1 Urb1 z*RH04_1 hc04
+ ID_1*VI01_1 QL_1*PA10_1 RH04_1*Urb1;
+ ods output ParameterEstimates= Imp_Estimates;
+ run;
+
+#Comparing the CC and Imputation S.Es
+
+data Imp_Ests;
+set work.Imp_Estimates;
+Keep Parm z AGE8 QL_1 PA10_1 TA06_1 ID_1 RH04_1 VI01_1 Urb1 hc04 STDErr;
+run;
+
+data CC_Ests;
+set work.CC_Estimates;
+Keep Variable ClassVal0 ClassVal1 STDErr;
+run;
+
+%let vars_mod = z,	age8, QL_1,	VI01_1,	PA10_1,	TA06_1,	ID_1,	Urb1,	RH04_1, hc04;
+%let vars_mod_rev = hc04, RH04_1 ,Urb1, ID_1, TA06_1, PA10_1, VI01_1 ,QL_1,age8,z;
+proc sql;
+create table Percentage_Inc as
+select upper(a.parm), upper(b.variable), classVal0, classVal1, a.STDErr as imp_err, b.STDErr as cc_err, 
+	COALESCE(&vars_mod.) as val1,
+	case when COALESCE(&vars_mod.) ne 
+		COALESCE(&vars_mod_rev.) then 
+			COALESCE(&vars_mod_rev.)
+ 	end as val2,
+ 	100*(b.STDErr - a.STDErr)/b.STDErr as improvement, 
+ 	b.STDErr - a.STDErr > 0 as is_better
+from Imp_Ests a 
+full outer join CC_Ests b on upper(parm) = upper(variable) 
+and COALESCE(&vars_mod.)= classVal0 
+and 
+	case when COALESCE(&vars_mod.) ne 
+		COALESCE(&vars_mod_rev.) then 
+			COALESCE(&vars_mod_rev.) =classVal1
+ 	else 1=1
+ 	end
+;
+run;
