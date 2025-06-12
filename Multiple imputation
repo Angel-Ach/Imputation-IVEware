@@ -529,9 +529,74 @@ run;
 %mend;
 
 ##Call the macro
-%detect_type(lib=work, data=selected_his, threshold=10, create_lists=NO);
+%detect_type(lib=work, data=selected_his, threshold=12, create_lists=NO);
 
+# Multiple Imputation using IVEware in SAS
+options set=SRCLIB "C:\Program Files\Srclib\sas";                                                                                                                                                                                                               
+options sasautos=(!SRCLIB sasautos) mautosource;                                                                                                                                                                                                                
 
+libname thesis "C:\Users\guest7\Downloads\Thesis Gloria";                                                                                                                                                                                                       
+proc import datafile="C:\Users\guest7\Downloads\Thesis Gloria\SELECTED_HIS_Edited_final.csv"                                                                                                                                                                    
+out=selected_vars                                                                                                                                                                                                                                               
+dbms=csv                                                                                                                                                                                                                                                        
+replace;                                                                                                                                                                                                                                                        
+guessingrows=max;                                                                                                                                                                                                                                               
+getnames=yes;                                                                                                                                                                                                                                                   
+run;                                                                                                                                                                                                                                                            
+data selected_vars;                                                                                                                                                                                                                                             
+set selected_vars;                                                                                                                                                                                                                                              
+drop VAR1;                                                                                                                                                                                                                                                      
+run;                                                                                                                                                                                                                                                            
+
+%impute(name=imputeX25,dir=C:\Users\guest7\Downloads\Thesis Gloria,setup=new)
+title Multiple imputation HS;
+datain selected_vars;
+dataout thesis.imputeX25 ALL;
+default continuous;
+categorical AL06_3 ET01 HC06_1 HC07_1 HC09_1 HC10_1 ID07_3 ID07_30 IN_1 PA01_2
+PA10_1 PA10_2 TA01 TA09 TA10 Urb1
+al09 al10 al11 al12 al13 al0901 al1001 al1101 al1201 al1301 et02 ga01
+ga04 ga06 hc01 hc04 hc05 id01 id03 id05 pa01 pa02 pa04 pa06
+pa08 pa10
+rh0710 rh0711 rh0712 rh0713 rh0714 rh0715 rh0716 ta02 ta03 ta06 ta08 ta13 ta14
+ta1101 ta1102 ta1103 ta1104 ta1105 ta1106 ta1107 ta1108 ta1109
+ta1501 ta1502 ta1503 ta1504 ta1505 ta1506 ta1507 ta1508 ta1509 vi01 vi04 vi0201
+vi0202 vi0203 vi0204 vi0205
+vi0206 vi0207 vi0208 vi0211 vi0212 vi0213 vi0214 vi0301 vi0302 vi0303 vi0304
+vi0305 vi0306 vi0307 vi0308 vi0309 vi0310 vi0311 HC09_1 HC10_1 RH06 RH05 Provw prov;
+transfer id_anom_e5;
+interact
+VI01 *id01 VI01*id03  VI01*id0701  VI01*id0702 VI01*id0703  VI01*id0704
+VI01*id0705 VI01*id0706  VI01*id0707  VI01*id0708  VI01*id0709  VI01*id0710
+VI01*id0711 urb1*RH04 QL01*PA10 QL02*PA10 QL03*PA10 QL04*PA10 QL05*PA10;
+Bounds GA04a (>40) QL_2(>=-0.5, <=1) ta0701(>=0, <=100) TA04(>=8, <=90)
+AL01(>=1, <=9) AL02(>=1, <=5) AL03(>=1, <=7) AL04(>=1, <=4) AL05(>=1, <=7) AL06(>=1, <=9)
+AL07(>=1, <=6) ET03(>=1, <=11) GA0205(>=1, <=6) ID0401(>=1, <=5) ID0402(>=1, <=5) ID0403(>=1, <=5)
+ID0404(>=1, <=5) ID0405(>=1, <=5) ID0406(>=1, <=5) ID06(>=1, <=5) ID0701(>=1, <=4)
+ID0702(>=1, <=4) ID0703(>=1, <=4) ID0704(>=1, <=4) ID0705(>=1, <=4) ID0706(>=1, <=4)
+ID0707(>=1, <=4) ID0708(>=1, <=4) ID0709(>=1, <=4) ID0710(>=1, <=4) ID0711(>=1, <=4)
+ID0712(>=1, <=4) PA03(>=1, <=5) PA05(>=1, <=5) QL01(>=1, <=5) QL02(>=1, <=5) QL03(>=1, <=5)
+QL04(>=1, <=5) QL05(>=1, <=5) RH04(>=1, <=4) RH07_1(>=1, <=10)
+TA12(>=1, <=5) VT0201(>=1, <=5) VT0202(>=1, <=5) VT0203(>=1, <=5) VT0204(>=1, <=5) WB01(>=1, <=4)
+WB02(>=1, <=4) WB03(>=1, <=4) WB04(>=1, <=4) WB05(>=1, <=4) WB06(>=1, <=4) WB07(>=1, <=4)
+WB08(>=1, <=4) WB09(>=1, <=4) WB10(>=1, <=4) WB11(>=1, <=4) WB12(>=1, <=4) WB13(>=1, <=4) VT01(>=0, <=10)
+ID02(>=8, <=80) HC08_1(>=0)PA02(>=0, <=7) PA04(>=0, <=7) PA06(>=0, <=7) PA07H(>=0) PA07M(>=0, <=60)
+PA08(>=0, <=7) PA09H(>=0, <=24) PA09M(>=0, <=60) PA09_1(>=0) RH02(>=0) TA0101(>=0)
+TA05(>=0) TA0702(>=0) TA0703(>=0) TA0704(>=0)TA0705(>=0)
+AL08(>=8,<=80) GA0501(>=1, <4) GA0502(>=1, <4)
+GA0503(>=1, <4) GA0504(>=1, <4) GA0505(>=1, <4) GA0506(>=1, <4) GA0507(>=1, <4) GA0508(>=1, <4)
+GA0509(>=1, <4)
+GA0206(>=1, <=6) GA0207(>=1, <=6) GA0208(>=1, <=6) GA0209(>=1, <=6) GA0301(>=1, <=6)
+GA0302(>=1, <=6)
+GA0303(>=1, <=6) GA0304(>=1, <=6) GA0305(>=1, <=6) GA0306(>=1, <=6) GA0307(>=1, <=6) GA0308(>=1, <=6)
+GA0309(>=1, <=6);
+minrsqd 0.01;
+iterations 8;
+MAXLOGI 50;
+multiples 10;
+seed 20345;
+print coeff;
+run;
 
 #Post imputation
 ##Importing the data (m=10)
