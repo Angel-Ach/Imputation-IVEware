@@ -2116,7 +2116,7 @@ by _mult_;
     age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04
       
     /param=ref;
-  MODEL VT01_2(order=internal) = z age8*z QL_1*z VI01_1 PA10_1*z TA06_1 ID_1*z Urb1 RH04_1*z hc04
+  MODEL Response(order=internal) = z age8*z QL_1*z VI01_1 PA10_1*z TA06_1 ID_1*z Urb1 RH04_1*z hc04
 ID_1*VI01_1
 QL_1*PA10_1 
 RH04_1*Urb1
@@ -2137,19 +2137,64 @@ data lgscovb;
   set lgscovb(rename=(_mult_=_Imputation_));
 run;
 
-data lgsparms_1;
-    set lgsparms;
-    if Variable = 'Intercept' and ClassVal0 = 1 then Variable = 'Intercept_1';
-    else if Variable = 'Intercept' and ClassVal0 = 2 then Variable = 'Intercept_2';
-run;
-
 proc MIANALYZE parms(classvar=classval)=lgsparms_1 covb(EFFECTVAR=stacking)=lgscovb ;
  class z age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04;
- modeleffects  Intercept_1 Intercept_2 z z*AGE8 z*QL_1 VI01_1 z*PA10_1 TA06_1 z*ID_1 Urb1 z*RH04_1 hc04
+ modeleffects  Intercept z z*AGE8 z*QL_1 VI01_1 z*PA10_1 TA06_1 z*ID_1 Urb1 z*RH04_1 hc04
  ID_1*VI01_1 QL_1*PA10_1 RH04_1*Urb1;
  ods output ParameterEstimates= Imp_Estimates;
  run;
 
+#Complete case Ananlysis
+data cc_filtered;
+    set particip(keep= ID_ANOM_e5 hh_cluster_e5 year age8 HC04  ET_3  IN_1 QL_1 PA10_1 AL05_3 
+    TA06_1 ID_1 RH04_1 VT01_2 VI01_1 Urb1 wfin PROVW);
+run;
+
+data clean_datalog;
+set clean_data;
+  ARRAY num_vars(*) _NUMERIC_;
+  DO i = 1 TO DIM(num_vars);
+    IF num_vars(i) = -1 THEN num_vars(i) = .;
+    IF num_vars(i) = -3 THEN num_vars(i) = 0;
+  END;
+  missing_flag = 0;
+  IF NMISS(OF _NUMERIC_) > 0 THEN missing_flag = 1;
+  %IF %SYSFUNC(COUNTW(%SYSFUNC(COMPBL(%SYSFUNC(STRIP(_CHARACTER_)))))) > 0 %THEN %DO;
+    ARRAY char_vars(*) _CHARACTER_;
+    DO j = 1 TO DIM(char_vars);
+      IF MISSING(char_vars(j)) THEN missing_flag = 1;
+    END;
+  %END;
+  IF missing_flag = 0 THEN OUTPUT;
+  
+  DROP i j missing_flag;
+  run;
+
+  data stacked_cc;
+  set clean_datalog;
+  do threshold = 1 to 2;
+    response = (VT01_2 <= threshold);
+    z = threshold - 1; /*Intercept of of 2nd logit, where threshold = 2*/
+    m =1-z;
+    output;
+  end;
+run;
+
+PROC SURVEYLOGISTIC DATA=stacked_cc;
+  STRATA provw;
+  CLUSTER hh_cluster_e5;
+  WEIGHT wfin;
+CLASS z(ref='1') 
+    age8(ref='8') QL_1(ref='2') VI01_1(ref='2') PA10_1(ref='3') TA06_1(ref='4') ID_1(ref='2') Urb1(ref='4') RH04_1(ref='2') hc04(ref='2');
+      
+  MODEL response(order=internal) = z age8*z QL_1*z VI01_1 PA10_1*z TA06_1 ID_1*z Urb1 RH04_1*z hc04
+ID_1*VI01_1
+QL_1*PA10_1 
+RH04_1*Urb1
+/ LINK=CUMLOGIT clparm ;
+  OUTPUT OUT=reg_outputz PRED=predicted CUMPRED =cumpred;
+   ods output ParameterEstimates = CC_Estimates;
+RUN;
 #Comparing the CC and Imputation S.Es
 
 data Imp_Ests;
@@ -2185,3 +2230,41 @@ and
  	end
 ;
 run;
+
+PROC LOGISTIC DATA=clean_datalog;
+  *STRATA provw;
+  *CLUSTER hh_cluster_e5;
+  *WEIGHT wfin;
+CLASS 
+    age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04/param=ref;
+  MODEL VT01_2(order=internal) =  age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04
+ID_1*VI01_1
+QL_1*PA10_1 
+RH04_1*Urb1
+/ LINK=CUMLOGIT  cl;
+  OUTPUT OUT=reg_outputz PRED=predicted CUMPRED =cumpred;
+   ods output ParameterEstimates = CC_Estimateslog;
+   
+RUN;
+
+****imputed;
+PROC LOGISTIC DATA=subset;
+by _mult_;
+  *STRATA provw;
+  *CLUSTER hh_cluster_e5;
+  *WEIGHT wfin;
+  CLASS 
+    age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04
+      
+    /param=ref;
+  MODEL VT01_2(order=internal) =  age8 QL_1 VI01_1 PA10_1 TA06_1 ID_1 Urb1 RH04_1 hc04
+ID_1*VI01_1
+QL_1*PA10_1 
+RH04_1*Urb1
+
+/ LINK=CUMLOGIT covb maxiter=1000;
+  OUTPUT OUT=logreg_imputeds PRED=predicted CUMPRED =cumpred;
+  ods output ParameterEstimates=lgsparms (where=(_Mult_ ne .))
+              CovB=lgscovb parminfo = pinfo;
+RUN;
+ods select all;
